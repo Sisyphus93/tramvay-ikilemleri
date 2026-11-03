@@ -16,6 +16,8 @@ interface ResultOverlayProps {
   isLast: boolean;
 }
 
+const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 export const ResultOverlay: React.FC<ResultOverlayProps> = ({
   dilemma,
   decision,
@@ -38,13 +40,13 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
 
   const container = reduceMotion
     ? { hidden: {}, show: {} }
-    : { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.04 } } };
+    : { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.06 } } };
 
   const item = reduceMotion
     ? { hidden: {}, show: {} }
     : {
-        hidden: { opacity: 0, y: 12 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.42, ease: 'easeOut' as const } },
+        hidden: { opacity: 0, y: 14 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
       };
 
   return (
@@ -52,7 +54,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
       variants={container}
       initial="hidden"
       animate="show"
-      className="result-card paper-card w-full max-w-2xl mx-auto mt-6"
+      className="result-card paper-card blueprint-result w-full max-w-2xl mx-auto mt-6"
     >
       <motion.div variants={item} className="result-header">
         <div className="flex items-center gap-2">
@@ -65,9 +67,15 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
           {dilemma.conceptualChoice ? 'SEÇİM YAPILDI' : leverPulled ? 'MAKAS DEĞİŞTİRİLDİ' : 'DOĞAL AKIŞA BIRAKILDI'}
         </span>
       </motion.div>
+      <motion.div
+        initial={reduceMotion ? {} : { scaleX: 0 }}
+        animate={{ scaleX: 1 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.9, ease: EASE, delay: 0.12 }}
+        className="result-rule origin-left"
+      />
 
       <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-5">
-        <div className="result-tile">
+        <div className="result-tile blueprint-tile">
           <div className="flex items-center gap-1.5 micro-label text-[#2F8478] mb-2">
             <ShieldCheck className="w-4 h-4" />
             <span>{dilemma.conceptualChoice ? 'KORUNAN:' : 'KURTARILAN:'}</span>
@@ -76,7 +84,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
           <p className="text-[11px] text-[#6B6154] mt-1 leading-relaxed">{savedTarget.description}</p>
         </div>
 
-        <div className="result-tile">
+        <div className="result-tile blueprint-tile">
           <div className="flex items-center gap-1.5 micro-label text-[#A23A26] mb-2">
             <Skull className="w-4 h-4" />
             <span>{dilemma.conceptualChoice ? 'SONUÇ:' : 'FEDA EDİLEN / ZAYİAT:'}</span>
@@ -86,7 +94,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
         </div>
       </motion.div>
 
-      <motion.div variants={item} className="ink-band">
+      <motion.div variants={item} className="ink-band blueprint-caption">
         <p className="font-display text-lg leading-relaxed">“{commentary}”</p>
       </motion.div>
 

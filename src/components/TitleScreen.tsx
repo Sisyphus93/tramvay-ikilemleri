@@ -13,19 +13,28 @@ interface TitleScreenProps {
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
   const reduceMotion = useReducedMotion();
+  const ease = [0.16, 1, 0.3, 1] as const;
+
   const reveal = reduceMotion
     ? { initial: {}, animate: {} }
     : {
-        initial: { opacity: 0, y: 16 },
+        initial: { opacity: 0, y: 20 },
         animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.65, ease: 'easeOut' as const },
+        transition: { duration: 0.75, ease },
       };
 
   return (
     <div className="w-full max-w-3xl mx-auto text-center">
-      <motion.section {...reveal} className="title-ticket">
-        <div className="micro-label title-kicker">27 İKİLEM · TEK BİR VİCDAN · SES AÇIK</div>
-        <div className="foil-rule mx-auto max-w-sm mt-4" />
+      <motion.section {...reveal} className="title-ticket blueprint-ticket">
+        <div className="micro-label title-kicker">
+          <span className="numeral">27</span> İKİLEM · TEK BİR VİCDAN · SES AÇIK
+        </div>
+        <motion.div
+          initial={reduceMotion ? {} : { scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 1.1, ease, delay: 0.12 }}
+          className="foil-rule mx-auto max-w-sm mt-4 origin-center"
+        />
         <h1 className="mt-5">
           Absürt <span className="brass-text">Tramvay</span> İkilemleri
         </h1>
@@ -35,55 +44,84 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
       </motion.section>
 
       <motion.div
-        initial={reduceMotion ? {} : { opacity: 0, scale: 0.94 }}
+        initial={reduceMotion ? {} : { opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={reduceMotion ? { duration: 0 } : { delay: 0.18, duration: 0.7, ease: 'easeOut' }}
+        transition={reduceMotion ? { duration: 0 } : { delay: 0.22, duration: 0.85, ease }}
         className="title-tram"
       >
-        <svg viewBox="0 0 200 120" className="w-full h-full overflow-visible">
+        <svg viewBox="0 0 320 150" className="blueprint-svg w-full h-full overflow-visible" role="img" aria-label="Makas şeması tramvay çizimi">
           <defs>
-            <filter id="titleBrassGlow" x="-60%" y="-60%" width="220%" height="220%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="7" />
+            <linearGradient id="titleBrass" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#8A6222" />
+              <stop offset="50%" stopColor="#E6C77A" />
+              <stop offset="100%" stopColor="#B8893B" />
+            </linearGradient>
+            <pattern id="titleGrid" width="16" height="16" patternUnits="userSpaceOnUse">
+              <path d="M 16 0 L 0 0 0 16" fill="none" stroke="#B8893B" strokeWidth="0.5" opacity="0.26" />
+            </pattern>
+            <filter id="titleGlow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
             </filter>
-            <radialGradient id="titleSpot" cx="50%" cy="20%" r="70%">
-              <stop offset="0%" stopColor="#E6C77A" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#E6C77A" stopOpacity="0" />
-            </radialGradient>
           </defs>
 
-          <ellipse cx="100" cy="58" rx="92" ry="48" fill="url(#titleSpot)" />
-          <path d="M 10 98 Q 100 94 190 98" stroke="#E7DCC5" strokeWidth="18" strokeLinecap="round" fill="none" />
+          <rect width="320" height="150" rx="8" fill="#F7F1E5" />
+          <rect width="320" height="150" rx="8" fill="url(#titleGrid)" />
+          <g className="blueprint-registration">
+            <path d="M 10 10 h 14 M 10 10 v 14" />
+            <path d="M 310 10 h -14 M 310 10 v 14" />
+            <path d="M 10 140 h 14 M 10 140 v -14" />
+            <path d="M 310 140 h -14 M 310 140 v -14" />
+          </g>
+          <text x="18" y="28" className="blueprint-subcode">PLAN 00 · GİRİŞ ŞEMASI</text>
+          <text x="302" y="28" textAnchor="end" className="blueprint-subcode">ÖLÇEK 1:1</text>
+          <line x1="18" y1="34" x2="302" y2="34" className="blueprint-rule" />
 
-          <line x1="15" y1="90" x2="185" y2="90" stroke="#2F8478" strokeWidth="3.5" strokeLinecap="round" />
-          <line x1="15" y1="100" x2="185" y2="100" stroke="#2F8478" strokeWidth="3.5" strokeLinecap="round" />
-          {[25, 55, 85, 115, 145, 175].map((x) => (
-            <rect key={x} x={x} y="86" width="4.5" height="18" fill="#6B6154" rx="1" opacity="0.8" />
+          <path d="M 20 112 Q 160 106 300 112" className="blueprint-ground" />
+          <path d="M 24 98 L 296 98" className="blueprint-rail blueprint-rail--approach" />
+          <path d="M 24 110 L 296 110" className="blueprint-rail blueprint-rail--approach" />
+          {[44, 76, 108, 140, 172, 204, 236, 268].map((x) => (
+            <line key={x} x1={x} y1="94" x2={x} y2="114" className="blueprint-sleeper" />
           ))}
 
-          <g transform="translate(65, 30)">
-            <rect x="2" y="52" width="66" height="5" rx="2" fill="#E7DCC5" />
-            <rect x="4" y="12" width="66" height="38" rx="5" fill="#C2412D" opacity="0.92" />
-            <rect x="0" y="10" width="66" height="38" rx="5" fill="none" stroke="#2A2520" strokeWidth="2.5" />
-            <rect x="0" y="26" width="66" height="7" fill="#F4EDDF" />
-            <rect x="6" y="15" width="13" height="9" rx="1.5" fill="#E7DCC5" stroke="#2A2520" strokeWidth="1.5" />
-            <rect x="25" y="15" width="13" height="9" rx="1.5" fill="#E7DCC5" stroke="#2A2520" strokeWidth="1.5" />
-            <rect x="44" y="15" width="16" height="16" rx="2" fill="#E7DCC5" stroke="#2A2520" strokeWidth="1.8" />
-            <circle cx="52" cy="22" r="2.8" fill="#2A2520" />
-            <circle cx="66" cy="30" r="3.5" fill="#E6C77A" stroke="#2A2520" strokeWidth="1.5" />
-            <circle cx="70" cy="30" r="9" fill="#E6C77A" opacity="0.45" filter="url(#titleBrassGlow)" />
-            <line x1="20" y1="10" x2="10" y2="-4" stroke="#2A2520" strokeWidth="2" />
-            <line x1="10" y1="-4" x2="35" y2="-4" stroke="#2A2520" strokeWidth="2.5" />
-            <circle cx="15" cy="50" r="4.5" fill="#2A2520" />
-            <circle cx="52" cy="50" r="4.5" fill="#2A2520" />
-            <circle cx="-3" cy="30" r="2.5" fill="#B8893B" stroke="#2A2520" strokeWidth="1" />
+          <g transform="translate(118, 62)">
+            <rect x="-44" y="-18" width="88" height="36" rx="6" className="blueprint-tram__body" />
+            <rect x="-40" y="-14" width="80" height="28" rx="4" className="blueprint-tram__inner" />
+            <line x1="-44" y1="-2" x2="44" y2="-2" className="blueprint-tram__trim" />
+            <line x1="-44" y1="8" x2="44" y2="8" className="blueprint-tram__trim" />
+            {[-30, -12, 6, 24].map((x) => (
+              <rect key={x} x={x} y="-10" width="14" height="9" rx="1.5" className="blueprint-tram__window" />
+            ))}
+            <path d="M -20 -18 L -30 -30 L -2 -30" className="blueprint-tram__pantograph" />
+            <line x1="-30" y1="-30" x2="12" y2="-30" className="blueprint-tram__pantograph" />
+            <circle cx="-24" cy="20" r="5" className="blueprint-tram__wheel" />
+            <circle cx="24" cy="20" r="5" className="blueprint-tram__wheel" />
+            <circle cx="44" cy="0" r="4" className="blueprint-tram__lamp" filter="url(#titleGlow)" />
+            <path d="M 48 -3 L 74 -12 L 74 12 L 48 3 Z" className="blueprint-tram__beam" />
+            <path d="M 0 -5 L 5 0 L 0 5 L -5 0 Z" className="blueprint-tram__emblem" />
           </g>
+
+          <g transform="translate(62, 104)" className="blueprint-lever">
+            <rect x="-16" y="-6" width="32" height="14" rx="2" className="blueprint-lever__base" />
+            <circle cx="0" cy="0" r="4" className="blueprint-lever__pivot" />
+            <g transform="rotate(-24)" className="blueprint-lever__handle">
+              <line x1="0" y1="0" x2="0" y2="-30" className="blueprint-lever__stem" />
+              <circle cx="0" cy="-33" r="6" className="blueprint-lever__knob" />
+            </g>
+          </g>
+
+          <text x="18" y="136" className="blueprint-subcode">DÜZ HAT · MAKAS BEKLEMEDE</text>
+          <text x="302" y="136" textAnchor="end" className="blueprint-subcode">REV. 27</text>
         </svg>
       </motion.div>
 
       <motion.div
-        initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
+        initial={reduceMotion ? {} : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={reduceMotion ? { duration: 0 } : { delay: 0.32, duration: 0.5 }}
+        transition={reduceMotion ? { duration: 0 } : { delay: 0.38, duration: 0.65, ease }}
         className="pt-4"
       >
         <button onClick={onStart} data-hover-sound className="btn-primary px-9 py-4 text-base">
@@ -93,7 +131,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
         </button>
       </motion.div>
 
-      <p className="font-handwriting text-[#7A6F60] text-lg mt-6">
+      <p className="micro-label text-[#7A6F60] mt-6 tracking-widest">
         Kolu çekmek ya da çekmemek... İşte bütün mesele bu.
       </p>
     </div>

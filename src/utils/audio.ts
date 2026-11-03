@@ -393,7 +393,7 @@ export const playDecisionWhoosh = () => {
 
   duckMusicBed(true);
   const now = ctx.currentTime;
-  const duration = 0.42;
+  const duration = 0.52;
 
   const noise = ctx.createBufferSource();
   noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.42);
@@ -423,7 +423,7 @@ export const playDecisionWhoosh = () => {
   tone.start(now);
   tone.stop(now + duration + 0.02);
 
-  setTimeout(() => duckMusicBed(false), 700);
+  setTimeout(() => duckMusicBed(false), 820);
 };
 
 /** Brass-like three-note reveal chime with a long, soft tail. */
@@ -473,18 +473,18 @@ export const playPaperSwish = () => {
   if (!ctx) return;
 
   const now = ctx.currentTime;
-  const duration = 0.52;
+  const duration = 0.58;
   const noise = ctx.createBufferSource();
   noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.5);
 
   const filter = ctx.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(520, now);
-  filter.frequency.linearRampToValueAtTime(1450, now + duration * 0.5);
-  filter.frequency.linearRampToValueAtTime(420, now + duration);
+  filter.frequency.setValueAtTime(720, now);
+  filter.frequency.linearRampToValueAtTime(2800, now + duration * 0.5);
+  filter.frequency.linearRampToValueAtTime(620, now + duration);
 
   const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.11, now);
+  gain.gain.setValueAtTime(0.095, now);
   gain.gain.exponentialRampToValueAtTime(0.004, now + duration);
 
   noise.connect(filter);
@@ -493,8 +493,49 @@ export const playPaperSwish = () => {
   noise.start(now);
 };
 
+/** Thin brass-foil shimmer for blueprint scene transitions. */
+export const playFoilSweep = () => {
+  if (!soundEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const duration = 0.78;
+
+  const noise = ctx.createBufferSource();
+  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.32);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.setValueAtTime(1700, now);
+  filter.frequency.linearRampToValueAtTime(5200, now + duration);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.linearRampToValueAtTime(0.042, now + 0.12);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  noise.connect(filter);
+  filter.connect(gain);
+  connectOutput(gain, 0.34);
+  noise.start(now);
+
+  [1567.98, 2093.0].forEach((freq, idx) => {
+    const t = now + 0.08 + idx * 0.16;
+    const osc = ctx.createOscillator();
+    const ping = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    ping.gain.setValueAtTime(0, t);
+    ping.gain.linearRampToValueAtTime(0.026, t + 0.01);
+    ping.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(ping);
+    connectOutput(ping, 0.42);
+    osc.start(t);
+    osc.stop(t + 0.32);
+  });
+};
+
 export const playPremiumTransition = () => {
   playPaperSwish();
+  playFoilSweep();
   playRevealChime(0.42);
 };
 
@@ -589,13 +630,13 @@ export const playRisingSweep = () => {
 
   duckMusicBed(true);
   const now = ctx.currentTime;
-  const duration = 1.18;
+  const duration = 1.55;
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(380, now);
-  osc.frequency.exponentialRampToValueAtTime(960, now + duration);
+  osc.frequency.setValueAtTime(320, now);
+  osc.frequency.exponentialRampToValueAtTime(880, now + duration);
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(0.082, now + 0.16);
   gain.gain.linearRampToValueAtTime(0.082, now + duration * 0.82);
@@ -609,8 +650,8 @@ export const playRisingSweep = () => {
   noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.22);
   const filter = ctx.createBiquadFilter();
   filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(600, now);
-  filter.frequency.linearRampToValueAtTime(2200, now + duration);
+  filter.frequency.setValueAtTime(520, now);
+  filter.frequency.linearRampToValueAtTime(2600, now + duration);
   filter.Q.value = 0.7;
   const noiseGain = ctx.createGain();
   noiseGain.gain.setValueAtTime(0.035, now);
@@ -620,7 +661,7 @@ export const playRisingSweep = () => {
   connectOutput(noiseGain, 0.12);
   noise.start(now);
 
-  setTimeout(() => duckMusicBed(false), 1450);
+  setTimeout(() => duckMusicBed(false), 1850);
 };
 
 /** Muted low impact with a soft body and reverb tail. */
