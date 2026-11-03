@@ -38,10 +38,10 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const totalLeverPulls = history.filter((h) => h.leverPulled).length;
 
   const getArchetype = () => {
-    const savedCat = history.find((h) => (h.dilemmaId === 23 || h.dilemmaId === 8) && !h.leverPulled);
-    const killedCat = history.find((h) => (h.dilemmaId === 23 || h.dilemmaId === 8) && h.leverPulled);
-    const killedKolsuz = history.find((h) => (h.dilemmaId === 27 || h.dilemmaId === 12) && h.leverPulled);
-    const tookBribe = history.find((h) => (h.dilemmaId === 28 || h.dilemmaId === 13) && h.leverPulled);
+    const savedCat = history.find((h) => (h.dilemmaId === 27 && h.isBonus) && !h.leverPulled);
+    const killedCat = history.find((h) => (h.dilemmaId === 27 && h.isBonus) && h.leverPulled);
+    const killedKolsuz = history.find((h) => (h.dilemmaId === 31 && h.isBonus) && h.leverPulled);
+    const tookBribe = history.find((h) => (h.dilemmaId === 32 && h.isBonus) && h.leverPulled);
 
     if (tookBribe && totalLeverPulls >= 16) {
       return {
@@ -209,11 +209,11 @@ Felsefeyi sen de çöz: ${window.location.origin}`;
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="inline-flex items-center gap-1 text-[#2F8478] font-medium">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      Kurtulan: {savedTarget.label}
+                      {dilemma.conceptualChoice ? 'Korunan' : 'Kurtulan'}: {savedTarget.label}
                     </span>
                     <span className="inline-flex items-center gap-1 text-[#D5472F] font-medium">
                       <Skull className="w-3.5 h-3.5" />
-                      Zayiat: {lostTarget.label}
+                      {dilemma.conceptualChoice ? 'Sonuç' : 'Zayiat'}: {lostTarget.label}
                     </span>
                   </div>
                 </div>
