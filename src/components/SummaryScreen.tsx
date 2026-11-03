@@ -38,47 +38,49 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const totalLeverPulls = history.filter((h) => h.leverPulled).length;
 
   const getArchetype = () => {
-    const savedCat = history.find((h) => (h.dilemmaId === 27 && h.isBonus) && !h.leverPulled);
-    const killedCat = history.find((h) => (h.dilemmaId === 27 && h.isBonus) && h.leverPulled);
-    const killedKolsuz = history.find((h) => (h.dilemmaId === 31 && h.isBonus) && h.leverPulled);
-    const tookBribe = history.find((h) => (h.dilemmaId === 32 && h.isBonus) && h.leverPulled);
+    // Ratios keep these thresholds meaningful after the duplicate bonus levels were pruned.
+    const leverPullRatio = totalLeverPulls / DILEMMAS.length;
+    const savedPet = history.find((h) => h.dilemmaId === 3 && !h.leverPulled);
+    const killedPet = history.find((h) => h.dilemmaId === 3 && h.leverPulled);
+    const killedKolsuz = history.find((h) => (h.dilemmaId === 26 && h.isBonus) && h.leverPulled);
+    const tookBribe = history.find((h) => h.dilemmaId === 9 && h.leverPulled);
 
-    if (tookBribe && totalLeverPulls >= 16) {
+    if (tookBribe && leverPullRatio >= 0.45) {
       return {
-        title: 'Pragmatist Kriptocu Baron',
+        title: 'Pragmatist Rüşvetçi',
         badge: 'PARANIN GÜCÜ',
-        desc: 'Felsefeyi cebine koydun, 100M TL’yi kaptın. Ahlak iyi ama Maldivler’de villa daha iyi.',
+        desc: 'Felsefeyi cebine koydun, 1 Milyon Dolar’ı kaptın. Ahlak iyi ama Maldivler’de villa daha iyi.',
       };
     }
-    if (savedCat && !killedKolsuz && totalLeverPulls <= 10) {
+    if (savedPet && !killedKolsuz && leverPullRatio <= 0.30) {
       return {
-        title: 'Hümanist ve Kedi Dostu',
-        badge: 'VİCDANLI KALBİ TEMİZ',
-        desc: 'Ne masum kediye kıydın ne de yayalara. Olabildiğince az makas çekip kadere teslim oldun.',
+        title: 'Evcil Hayvanını Koruyan Kaderci',
+        badge: 'DOSTUNU KORUDUN',
+        desc: 'Evcil hayvanını kurtardın, yabancıyı feda ettin; ama makası neredeyse hiç çekmedin.',
       };
     }
-    if (killedKolsuz && totalLeverPulls >= 15) {
+    if (killedKolsuz && leverPullRatio >= 0.44) {
       return {
         title: 'Kati Faydacı Sigma Gamer',
         badge: 'RANK HER ŞEYDİR',
-        desc: 'Dereceli maçta 0/15 giden kolsuzu hiç düşünmeden ezdin. Sayılar ve galibiyet senin tek pusulan.',
+        desc: 'Dereceli maçta 0/15 giden kolsuz kankanı hiç düşünmeden ezdin. Sayılar ve galibiyet senin tek pusulan.',
       };
     }
-    if (killedCat) {
+    if (killedPet) {
       return {
         title: 'Acımasız Rasyonalist',
         badge: 'SOĞUKKANLI HESAPÇI',
-        desc: 'Mahallenin tombul kedisini bile insan uğruna feda ettin. Türk interneti senden korkuyor.',
+        desc: 'Evcil hayvanını bile bir yabancı uğruna feda ettin. Chat senden korkuyor.',
       };
     }
-    if (totalLeverPulls >= 20) {
+    if (leverPullRatio >= 0.58) {
       return {
         title: 'Kaos ve Makas İlahı',
         badge: 'MAKAS TUTKUNU',
         desc: 'Önüne gelen her fırsatta kolu çektin. Düzen değil kaos yaratmak için buradasın.',
       };
     }
-    if (totalLeverPulls <= 8) {
+    if (leverPullRatio <= 0.24) {
       return {
         title: 'Kaderci Seyirci',
         badge: 'BEN YAPMADIM TRAMVAY YAPTI',

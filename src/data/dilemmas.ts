@@ -7,7 +7,7 @@ import { Dilemma } from '../types.ts';
 import { ORIGINAL_DILEMMAS } from './originalDilemmas.ts';
 import { BONUS_DILEMMAS } from './bonusDilemmas.ts';
 
-/** 20 klasik ikilem, ardından 14 değişmemiş bonus ikilem. */
+/** 20 klasik ikilem, ardından 7 bonus ikilem. */
 export const DILEMMAS: Dilemma[] = [
   ...ORIGINAL_DILEMMAS,
   ...BONUS_DILEMMAS.map((d, index) => ({

@@ -28,7 +28,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
         </h1>
 
         <p className="text-base sm:text-lg text-[#6B6154] max-w-xl mx-auto leading-relaxed">
-          Kontrolden çıkmış nostaljik kırmızı bir tramvay raylarda son sürat ilerliyor. Önünde bağlı duranlar ise tanıdık: Steam kütüphanen, Hatay dönercisi, dereceli maçta 0/15 giden kolsuz kankan veya mahallenin tombiş sokak kedisi.
+          Kontrolden çıkmış nostaljik kırmızı bir tramvay raylarda son sürat ilerliyor. Önünde bağlı duranlar ise tanıdık: Steam kütüphanen, yolcu seçen sarı taksi, Kurtlar Vadisi’nin ilk 97 bölümü, final gecesi not çıkaran öğrenci, 0/15 giden kolsuz kankan, Türkiye’nin ana fiber hattı ya da bizzat sen.
         </p>
       </div>
 
