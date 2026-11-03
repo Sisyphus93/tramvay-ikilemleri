@@ -1,0 +1,14 @@
+# Render Blueprint — deploy this repo as a static site.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: static
+    name: tramvay-ikilemleri
+    repo: https://github.com/Sisyphus93/tramvay-ikilemleri
+    branch: arena/adcbbb68-tramvay-ikilemleri
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    # SPA-friendly: Render serves index.html for unknown paths automatically.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
