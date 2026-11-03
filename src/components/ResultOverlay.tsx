@@ -4,9 +4,10 @@
  */
 
 import React from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Dilemma, Decision } from '../types.ts';
 import { ArrowRight, CheckCircle2, MessageSquare, ShieldCheck, Skull } from 'lucide-react';
-import { playPaperSwish } from '../utils/audio.ts';
+import { playPremiumTransition } from '../utils/audio.ts';
 
 interface ResultOverlayProps {
   dilemma: Dilemma;
@@ -21,6 +22,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
   onNext,
   isLast,
 }) => {
+  const reduceMotion = useReducedMotion();
   const leverPulled = decision === 'diverted';
   const commentary = leverPulled
     ? dilemma.divertedCommentary
@@ -30,84 +32,79 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
   const lostTarget = leverPulled ? dilemma.divertedTrack : dilemma.straightTrack;
 
   const handleNextClick = () => {
-    playPaperSwish(); // Sound cue: Paper swish on slide transition (Section 12)
+    playPremiumTransition();
     onNext();
   };
 
+  const container = reduceMotion
+    ? { hidden: {}, show: {} }
+    : { hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.04 } } };
+
+  const item = reduceMotion
+    ? { hidden: {}, show: {} }
+    : {
+        hidden: { opacity: 0, y: 12 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.42, ease: 'easeOut' as const } },
+      };
+
   return (
-    <div className="w-full max-w-2xl mx-auto mt-4 p-6 rounded-2xl bg-[#F4EDDF] border-2 border-[#2A2520] flat-shadow-lg animate-in fade-in duration-300">
-      {/* Top Header Recap */}
-      <div className="flex items-center justify-between pb-3 border-b-2 border-[#E7DCC5]">
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="result-card paper-card w-full max-w-2xl mx-auto mt-6"
+    >
+      <motion.div variants={item} className="result-header">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="w-5 h-5 text-[#2F8478]" />
-          <span className="text-base font-bold text-[#2A2520] font-headline">
-            Kararın:{' '}
-            <span className="text-[#D5472F]">
-              {leverPulled ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
-            </span>
+          <span className="font-headline text-base font-bold text-[#2A2520]">
+            Kararın: <span className="text-[#A23A26]">{leverPulled ? dilemma.divertedActionLabel : dilemma.straightActionLabel}</span>
           </span>
         </div>
-        <span className="text-xs font-label text-[#6B6154]">
+        <span className="micro-label text-[#7A6F60]">
           {dilemma.conceptualChoice ? 'SEÇİM YAPILDI' : leverPulled ? 'MAKAS DEĞİŞTİRİLDİ' : 'DOĞAL AKIŞA BIRAKILDI'}
         </span>
-      </div>
+      </motion.div>
 
-      {/* Real Ethical & Cultural Consequence Breakdown (No fake vote percentages!) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
-        {/* Saved */}
-        <div className="p-3.5 rounded-xl bg-[#E7DCC5]/70 border border-[#2A2520] space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-label text-[#2F8478] font-bold">
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-5">
+        <div className="result-tile">
+          <div className="flex items-center gap-1.5 micro-label text-[#2F8478] mb-2">
             <ShieldCheck className="w-4 h-4" />
             <span>{dilemma.conceptualChoice ? 'KORUNAN:' : 'KURTARILAN:'}</span>
           </div>
-          <div className="font-bold text-sm text-[#2A2520] font-headline">
-            {savedTarget.label}
-          </div>
-          <p className="text-[11px] text-[#6B6154]">
-            {savedTarget.description}
-          </p>
+          <div className="font-headline text-sm font-bold text-[#2A2520]">{savedTarget.label}</div>
+          <p className="text-[11px] text-[#6B6154] mt-1 leading-relaxed">{savedTarget.description}</p>
         </div>
 
-        {/* Sacrificed / Struck */}
-        <div className="p-3.5 rounded-xl bg-[#E7DCC5]/70 border border-[#2A2520] space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-label text-[#D5472F] font-bold">
+        <div className="result-tile">
+          <div className="flex items-center gap-1.5 micro-label text-[#A23A26] mb-2">
             <Skull className="w-4 h-4" />
             <span>{dilemma.conceptualChoice ? 'SONUÇ:' : 'FEDA EDİLEN / ZAYİAT:'}</span>
           </div>
-          <div className="font-bold text-sm text-[#D5472F] font-headline">
-            {lostTarget.label}
-          </div>
-          <p className="text-[11px] text-[#6B6154]">
-            {lostTarget.description}
-          </p>
+          <div className="font-headline text-sm font-bold text-[#A23A26]">{lostTarget.label}</div>
+          <p className="text-[11px] text-[#6B6154] mt-1 leading-relaxed">{lostTarget.description}</p>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Spoken Caption Band on Ink Background (Section 6 & 7: Spoken captions on an Ink band) */}
-      <div className="p-4 rounded-xl bg-[#2A2520] text-[#F4EDDF] space-y-2 flat-shadow">
-        <p className="text-sm font-headline leading-relaxed">
-          "{commentary}"
-        </p>
-      </div>
+      <motion.div variants={item} className="ink-band">
+        <p className="font-display text-lg leading-relaxed">“{commentary}”</p>
+      </motion.div>
 
-      {/* Handwritten Caveat Note (Twitch/Internet Culture Quip) */}
-      <div className="mt-3 flex items-center gap-2 text-[#D5472F] font-handwriting text-base">
+      <motion.div variants={item} className="chat-note mt-4">
         <MessageSquare className="w-4 h-4 shrink-0" />
         <span>{dilemma.chatReaction}</span>
-      </div>
+      </motion.div>
 
-      {/* Next Dilemma CTA */}
-      <div className="mt-5 flex justify-end">
+      <motion.div variants={item} className="mt-6 flex justify-end">
         <button
           onClick={handleNextClick}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#D5472F] hover:bg-[#b83721] text-[#F4EDDF] font-bold text-sm transition-all border-2 border-[#2A2520] flat-shadow hover:translate-x-[1px] hover:translate-y-[1px]"
+          data-hover-sound
+          className="btn-primary w-full sm:w-auto"
         >
-          <span className="font-headline tracking-wide">
-            {isLast ? 'Ahlaki Sicil Karneni Gör' : 'Sonraki İkilem'}
-          </span>
+          <span>{isLast ? 'Ahlaki Sicil Karneni Gör' : 'Sonraki İkilem'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };

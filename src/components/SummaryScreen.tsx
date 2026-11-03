@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { PlayerHistoryEntry } from '../types.ts';
 import { DILEMMAS } from '../data/dilemmas.ts';
-import { playChordSwell, playSoftTick } from '../utils/audio.ts';
+import { playSummaryReveal, playSoftTick } from '../utils/audio.ts';
 import {
   RotateCcw,
   Copy,
@@ -29,9 +30,10 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    playChordSwell();
+    playSummaryReveal();
   }, []);
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
@@ -98,12 +100,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const handleCopy = () => {
     playSoftTick(1);
-    const text = `🚋 ABSÜRT TRAMVAY İKİLEMLERİ — SICİL RAPORUM 🚋
-Unvanım: ${archetype.title} (${archetype.badge})
-💀 Toplam Zayiat: ${totalDeaths} Can Kaybı
-⚡ Makas Tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!
-
-Felsefeyi sen de çöz: ${window.location.origin}`;
+    const text = `🚋 ABSÜRT TRAMVAY İKİLEMLERİ — SICİL RAPORUM 🚋\nUnvanım: ${archetype.title} (${archetype.badge})\n💀 Toplam Zayiat: ${totalDeaths} Can Kaybı\n⚡ Makas Tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
 
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -111,81 +108,88 @@ Felsefeyi sen de çöz: ${window.location.origin}`;
     });
   };
 
+  const container = reduceMotion
+    ? { hidden: {}, show: {} }
+    : { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } } };
+
+  const item = reduceMotion
+    ? { hidden: {}, show: {} }
+    : {
+        hidden: { opacity: 0, y: 16 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } },
+      };
+
   return (
-    <div className="w-full max-w-3xl mx-auto py-8 px-4 animate-in fade-in duration-500">
-      {/* Title Header */}
-      <div className="text-center space-y-2 pb-6 border-b-2 border-[#2A2520]">
-        <span className="text-xs font-label text-[#D5472F] tracking-widest">
-          AHLAKİ & FELSEFİ SİCİL KARNESİ
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="w-full max-w-3xl mx-auto"
+    >
+      <motion.div variants={item} className="summary-header">
+        <span className="micro-label text-[#8A6222] tracking-widest">
+          AHLAKİ &amp; FELSEFİ SİCİL KARNESİ
         </span>
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#2A2520] font-headline">
-          Felsefeyi Çözdün!
-        </h1>
-        <p className="text-[#6B6154] text-sm max-w-lg mx-auto">
+        <h1>Felsefeyi Çözdün!</h1>
+        <p className="text-[#655B4E] text-sm max-w-lg mx-auto mt-3 leading-relaxed">
           {DILEMMAS.length} absürt tramvay ikilemini geride bıraktın. İşte verdiğin kararların toplumsal ve ahlaki bilançosu:
         </p>
-      </div>
+      </motion.div>
 
-      {/* Handcrafted Moral Archetype Stamp */}
-      <div className="my-6 p-6 rounded-2xl bg-[#E7DCC5] border-2 border-[#2A2520] flat-shadow text-center space-y-2 relative overflow-hidden">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#F4EDDF] text-[#D5472F] border border-[#2A2520] text-xs font-label">
+      <motion.div variants={item} className="stamp my-7">
+        <div className="badge-pill micro-label">
           <Award className="w-3.5 h-3.5" />
           <span>{archetype.badge}</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-[#2A2520] font-headline">
+        <h2 className="font-display text-3xl sm:text-4xl font-semibold text-[#2A2520] mt-4">
           {archetype.title}
         </h2>
-        <p className="text-sm text-[#2A2520] max-w-md mx-auto leading-relaxed">
+        <p className="text-sm text-[#5E5447] max-w-md mx-auto leading-relaxed mt-3">
           {archetype.desc}
         </p>
-      </div>
+      </motion.div>
 
-      {/* Real Player Statistics Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
-        <div className="p-4 rounded-xl bg-[#F4EDDF] border-2 border-[#2A2520] flat-shadow text-center space-y-1">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-label text-[#6B6154]">
-            <Skull className="w-4 h-4 text-[#D5472F]" />
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-7">
+        <div className="stat-card">
+          <div className="flex items-center justify-center gap-1.5 micro-label text-[#7A6F60]">
+            <Skull className="w-4 h-4 text-[#A23A26]" />
             <span>TOPLAM ZAYİAT</span>
           </div>
-          <div className="text-2xl font-bold text-[#2A2520] tabular-nums font-headline">
-            {totalDeaths} <span className="text-xs font-normal text-[#6B6154]">can</span>
+          <div className="font-display text-3xl font-semibold text-[#2A2520] tabular-nums mt-2">
+            {totalDeaths} <span className="text-xs font-sans font-normal text-[#6B6154]">can</span>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#F4EDDF] border-2 border-[#2A2520] flat-shadow text-center space-y-1">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-label text-[#6B6154]">
-            <span>KOLU ÇEKTİ</span>
-          </div>
-          <div className="text-2xl font-bold text-[#D5472F] tabular-nums font-headline">
-            {totalLeverPulls} <span className="text-xs font-normal text-[#6B6154]">kez</span>
+        <div className="stat-card">
+          <div className="micro-label text-[#7A6F60]">KOLU ÇEKTİ</div>
+          <div className="font-display text-3xl font-semibold text-[#A23A26] tabular-nums mt-2">
+            {totalLeverPulls} <span className="text-xs font-sans font-normal text-[#6B6154]">kez</span>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-[#F4EDDF] border-2 border-[#2A2520] flat-shadow text-center space-y-1">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-label text-[#6B6154]">
-            <span>HİÇBİR ŞEY YAPMADI</span>
-          </div>
-          <div className="text-2xl font-bold text-[#2F8478] tabular-nums font-headline">
-            {DILEMMAS.length - totalLeverPulls} <span className="text-xs font-normal text-[#6B6154]">kez</span>
+        <div className="stat-card">
+          <div className="micro-label text-[#7A6F60]">HİÇBİR ŞEY YAPMADI</div>
+          <div className="font-display text-3xl font-semibold text-[#2F8478] tabular-nums mt-2">
+            {DILEMMAS.length - totalLeverPulls} <span className="text-xs font-sans font-normal text-[#6B6154]">kez</span>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Detailed Choices Collapsible */}
-      <div className="my-6 border-2 border-[#2A2520] rounded-xl overflow-hidden bg-[#F4EDDF] flat-shadow">
+      <motion.div variants={item} className="my-7 paper-card overflow-hidden">
         <button
           onClick={() => {
             playSoftTick(0);
             setShowDetails(!showDetails);
           }}
-          className="w-full py-3 px-4 flex items-center justify-between text-left text-sm font-bold text-[#2A2520] font-headline hover:bg-[#E7DCC5] transition-colors"
+          data-hover-sound
+          className="w-full py-4 px-5 flex items-center justify-between text-left font-headline text-sm font-bold text-[#2A2520] hover:bg-[#E7DCC5]/50 transition-colors"
         >
           <span>{DILEMMAS.length} İkilemdeki Tercihlerinin Tam Dökümü</span>
           {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
 
         {showDetails && (
-          <div className="divide-y-2 divide-[#E7DCC5] border-t-2 border-[#2A2520]">
+          <div className="border-t border-[#B8893B]/30">
             {history.map((h, idx) => {
               const dilemma = DILEMMAS.find((d) => d.id === h.dilemmaId);
               if (!dilemma) return null;
@@ -194,16 +198,12 @@ Felsefeyi sen de çöz: ${window.location.origin}`;
               const lostTarget = isLever ? dilemma.divertedTrack : dilemma.straightTrack;
 
               return (
-                <div key={idx} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div key={idx} className="detail-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-[#2A2520] font-headline text-sm">
-                        {dilemma.title}
-                      </span>
-                    </div>
+                    <div className="font-headline text-sm font-bold text-[#2A2520]">{dilemma.title}</div>
                     <p className="text-[#6B6154]">
                       Tercihin:{' '}
-                      <strong className={isLever ? 'text-[#D5472F]' : 'text-[#2A2520]'}>
+                      <strong className={isLever ? 'text-[#A23A26]' : 'text-[#2A2520]'}>
                         {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
                       </strong>
                     </p>
@@ -213,7 +213,7 @@ Felsefeyi sen de çöz: ${window.location.origin}`;
                       <ShieldCheck className="w-3.5 h-3.5" />
                       {dilemma.conceptualChoice ? 'Korunan' : 'Kurtulan'}: {savedTarget.label}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[#D5472F] font-medium">
+                    <span className="inline-flex items-center gap-1 text-[#A23A26] font-medium">
                       <Skull className="w-3.5 h-3.5" />
                       {dilemma.conceptualChoice ? 'Sonuç' : 'Zayiat'}: {lostTarget.label}
                     </span>
@@ -223,18 +223,12 @@ Felsefeyi sen de çöz: ${window.location.origin}`;
             })}
           </div>
         )}
-      </div>
+      </motion.div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-        <button
-          onClick={handleCopy}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#D5472F] hover:bg-[#b83721] text-[#F4EDDF] font-bold text-sm transition-all border-2 border-[#2A2520] flat-shadow hover:translate-x-[1px] hover:translate-y-[1px]"
-        >
+      <motion.div variants={item} className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+        <button onClick={handleCopy} data-hover-sound className="btn-primary w-full sm:w-auto">
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          <span className="font-headline tracking-wide">
-            {copied ? 'Sicil Panoya Kopyalandı!' : 'Sicilimi Kopyala & Paylaş'}
-          </span>
+          <span>{copied ? 'Sicil Panoya Kopyalandı!' : 'Sicilimi Kopyala & Paylaş'}</span>
         </button>
 
         <button
@@ -242,12 +236,13 @@ Felsefeyi sen de çöz: ${window.location.origin}`;
             playSoftTick(2);
             onRestart();
           }}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#E7DCC5] hover:bg-[#ded1b6] text-[#2A2520] font-bold text-sm transition-all border-2 border-[#2A2520] flat-shadow hover:translate-x-[1px] hover:translate-y-[1px]"
+          data-hover-sound
+          className="btn-secondary w-full sm:w-auto"
         >
           <RotateCcw className="w-4 h-4" />
-          <span className="font-headline tracking-wide">Yeniden Oyna</span>
+          <span>Yeniden Oyna</span>
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };

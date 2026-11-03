@@ -5,11 +5,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Dilemma, Decision, TrackTarget } from '../types.ts';
-import {
-  playRisingSweep,
-  playLowThump,
-  playPencilScratch,
-} from '../utils/audio.ts';
+import { playRisingSweep, playLowThump } from '../utils/audio.ts';
 
 interface TrolleyCanvasProps {
   dilemma: Dilemma;
@@ -789,21 +785,50 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   };
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto rounded-2xl overflow-hidden border-2 border-[#2A2520] dark:border-[#4A423A] bg-[#F4EDDF] dark:bg-[#232C2F] flat-shadow select-none">
+    <div className="canvas-inner relative w-full max-w-4xl mx-auto select-none">
       <svg
         viewBox="0 0 600 280"
         className="w-full h-auto block"
         style={{ minHeight: '230px' }}
       >
         <defs>
-          {/* Hand-drawn Amber Halo for Headlight Spark (Section 3: max 40px blur, 40% opacity) */}
+          <linearGradient id="parchmentField" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#F8F2E7" />
+            <stop offset="55%" stopColor="#F4EDDF" />
+            <stop offset="100%" stopColor="#EADDC2" />
+          </linearGradient>
+          <radialGradient id="canvasSpot" cx="42%" cy="10%" r="75%">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.72" />
+            <stop offset="52%" stopColor="#E6C77A" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#B8893B" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="brassGradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#8A6222" />
+            <stop offset="42%" stopColor="#E6C77A" />
+            <stop offset="100%" stopColor="#B8893B" />
+          </linearGradient>
           <filter id="amberSparkGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="12" />
           </filter>
+          <filter id="brassGlow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
-        {/* Paper Background Field */}
-        <rect width="600" height="280" fill="#F4EDDF" />
+        {/* Parchment field + soft spotlight */}
+        <rect width="600" height="280" fill="url(#parchmentField)" />
+        <rect width="600" height="280" fill="url(#canvasSpot)" />
+        {isAnimating && (
+          <g opacity="0.32" stroke="#8A6222" strokeWidth="2" strokeLinecap="round">
+            <line x1="18" y1="112" x2="92" y2="112" />
+            <line x1="8" y1="124" x2="66" y2="124" />
+            <line x1="24" y1="162" x2="88" y2="162" />
+          </g>
+        )}
 
         {/* Ground Line / Scenery Ground (Warm Paper Deep #E7DCC5) */}
         <path
@@ -962,6 +987,9 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           transform="translate(180, 218)"
           className="cursor-pointer group"
           onClick={!isAnimating ? onLeverToggle : undefined}
+          data-hover-sound
+          role="button"
+          aria-label="Makas kolunu çevir"
         >
           {/* Flat shadow under lever box */}
           <rect x="-14" y="2" width="36" height="16" rx="3" fill="#E7DCC5" />
@@ -973,10 +1001,11 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             width="36"
             height="18"
             rx="3"
-            fill="#2F8478"
-            stroke="#2A2520"
-            strokeWidth="2.5"
+            fill="#211D18"
+            stroke="#B8893B"
+            strokeWidth="2"
           />
+          <rect x="-14" y="0" width="28" height="3" rx="1.5" fill="#B8893B" opacity="0.55" />
 
           {/* Tilting Lever Handle */}
           <g
@@ -993,11 +1022,12 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
               strokeLinecap="round"
             />
             {/* Knob in Vermilion #D5472F */}
+            <circle cx="0" cy="-40" r="12" fill="#E6C77A" opacity="0.32" filter="url(#brassGlow)" />
             <circle
               cx="0"
               cy="-40"
               r="7.5"
-              fill="#D5472F"
+              fill="url(#brassGradient)"
               stroke="#2A2520"
               strokeWidth="2"
             />
@@ -1018,7 +1048,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
               fontFamily="Caveat, cursive"
               fontSize="14"
               fontWeight="bold"
-              fill="#D5472F"
+              fill="#8A6222"
             >
               {leverPulled ? 'makas çekildi!' : 'makas kolu'}
             </text>
@@ -1076,12 +1106,10 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           <line x1="-12" y1="-18" x2="-22" y2="-30" stroke="#2A2520" strokeWidth="2.5" strokeLinecap="round" />
           <line x1="-22" y1="-30" x2="-4" y2="-30" stroke="#2A2520" strokeWidth="3" strokeLinecap="round" />
 
-          {/* HEADLIGHT SPARK (The only thing allowed to glow in §3!) */}
-          <circle cx="34" cy="0" r="3.5" fill="#E3A33B" stroke="#2A2520" strokeWidth="1.5" />
-          {/* Amber Halo */}
-          <circle cx="38" cy="0" r="10" fill="#E3A33B" opacity="0.35" filter="url(#amberSparkGlow)" />
-          {/* Subtle warm headlight beam */}
-          <polygon points="35,-2 70,-14 70,14 35,2" fill="#E3A33B" opacity="0.2" />
+          {/* Brass headlight spark */}
+          <circle cx="34" cy="0" r="3.5" fill="#E6C77A" stroke="#2A2520" strokeWidth="1.5" filter="url(#brassGlow)" />
+          <circle cx="38" cy="0" r="10" fill="#E6C77A" opacity="0.3" filter="url(#amberSparkGlow)" />
+          <polygon points="35,-2 70,-14 70,14 35,2" fill="#E6C77A" opacity="0.17" />
 
           {/* Tram Center Emblem */}
           <circle cx="-3" cy="6" r="3" fill="#F4EDDF" stroke="#2A2520" strokeWidth="1" />

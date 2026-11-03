@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Volume2, VolumeX, RotateCcw } from 'lucide-react';
 import { playSoftTick } from '../utils/audio.ts';
 
@@ -26,72 +27,54 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
   onRestart,
   isPlaying,
 }) => {
-  return (
-    <header className="w-full border-b-2 border-[#2A2520] bg-[#F4EDDF] sticky top-0 z-30">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-6">
-        {/* Zone 1: Wordmark in Fraunces Serif */}
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={() => {
-              playSoftTick(0);
-              onRestart();
-            }}
-            className="text-left group flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D5472F] rounded-md"
-          >
-            <span className="text-xl font-bold tracking-tight text-[#2A2520] group-hover:text-[#D5472F] transition-colors font-headline whitespace-nowrap">
-              Absürt Tramvay İkilemleri
-            </span>
-          </button>
-        </div>
+  const reduceMotion = useReducedMotion();
+  const progress = ((currentStep + 1) / totalSteps) * 100;
 
-        {/* Zone 2: Unboxed metadata in DM Sans (Section 6 & 8) */}
-        {isPlaying ? (
-          <div className="flex items-center gap-2 text-xs sm:text-sm font-label text-[#6B6154] shrink-0">
+  return (
+    <header className="premium-header">
+      <div className="premium-header__inner">
+        <button
+          onClick={() => {
+            playSoftTick(0);
+            onRestart();
+          }}
+          data-hover-sound
+          className="brand-mark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E6C77A] rounded-lg"
+          aria-label="Başa dön"
+        >
+          <span className="brand-mark__seal" aria-hidden="true">27</span>
+          <span className="transition-colors duration-300 hover:text-[#E6C77A]">
+            Absürt Tramvay İkilemleri
+          </span>
+        </button>
+
+        {isPlaying && (
+          <div className="header-meta font-label">
             <span>
-              İKİLEM{' '}
-              <strong className="text-[#2A2520] tabular-nums font-bold">
-                {currentStep + 1}
-              </strong>{' '}
-              / {totalSteps}
+              İKİLEM <strong className="tabular-nums">{String(currentStep + 1).padStart(2, '0')}</strong> / {totalSteps}
             </span>
-            <span aria-hidden="true" className="text-[#6B6154]">
-              ·
-            </span>
+            <span className="header-meta__divider" aria-hidden="true" />
             <span>
-              ZAYİAT:{' '}
-              <strong className="text-[#D5472F] tabular-nums font-bold">
-                {totalDeaths}
-              </strong>
+              ZAYİAT <strong className="tabular-nums text-[#E28B76]">{totalDeaths}</strong>
             </span>
           </div>
-        ) : null}
+        )}
 
-        {/* Zone 3: Actions (Sound toggle & Reset) */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => {
               playSoftTick(1);
               onToggleSound();
             }}
+            data-hover-sound
             aria-label={soundEnabled ? 'Sesi Kapat' : 'Sesi Aç'}
-            title={soundEnabled ? 'Müzik ve Ses Açık' : 'Sessiz'}
-            className={`p-2 rounded-lg border transition-all flex items-center gap-1.5 text-xs font-label ${
-              soundEnabled
-                ? 'bg-[#E7DCC5] border-[#2A2520] text-[#2A2520]'
-                : 'bg-transparent border-[#2A2520]/40 text-[#6B6154]'
-            }`}
+            title={soundEnabled ? 'Müzik ve ses açık' : 'Sessiz'}
+            className={`icon-button ${soundEnabled ? 'icon-button--active' : ''}`}
           >
-            {soundEnabled ? (
-              <>
-                <Volume2 className="w-4 h-4 text-[#2A2520]" />
-                <span className="hidden sm:inline">SES AÇIK</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4 text-[#D5472F]" />
-                <span className="hidden sm:inline">SESSİZ</span>
-              </>
-            )}
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            <span className="hidden sm:inline font-label text-[10px] tracking-widest">
+              {soundEnabled ? 'SES AÇIK' : 'SESSİZ'}
+            </span>
           </button>
 
           {isPlaying && (
@@ -100,9 +83,10 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
                 playSoftTick(0);
                 onRestart();
               }}
+              data-hover-sound
               aria-label="Başa Dön"
               title="Başa Dön"
-              className="p-2 rounded-lg text-[#2A2520] hover:bg-[#E7DCC5] border border-transparent hover:border-[#2A2520] transition-all"
+              className="icon-button"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -110,12 +94,13 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
         </div>
       </div>
 
-      {/* Progress Line */}
       {isPlaying && (
-        <div className="w-full h-1.5 bg-[#E7DCC5] overflow-hidden">
-          <div
-            className="h-full bg-[#D5472F] transition-all duration-300 ease-out"
-            style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
+        <div className="progress-track">
+          <motion.div
+            className="progress-fill"
+            initial={false}
+            animate={{ width: `${progress}%` }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.55, ease: 'easeOut' }}
           />
         </div>
       )}

@@ -4,16 +4,15 @@
  */
 
 import React from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Dilemma, Decision } from '../types.ts';
 import { GitFork, ShieldAlert } from 'lucide-react';
-import { playTinyClick } from '../utils/audio.ts';
 
 interface TrolleyControlsProps {
   dilemma: Dilemma;
   onMakeDecision: (decision: Decision) => void;
   disabled: boolean;
   leverPulled: boolean;
-  onLeverToggle: () => void;
 }
 
 export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
@@ -21,74 +20,72 @@ export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
   onMakeDecision,
   disabled,
   leverPulled,
-  onLeverToggle,
 }) => {
+  const reduceMotion = useReducedMotion();
+  const hover = reduceMotion ? undefined : { y: -3 };
+  const tap = reduceMotion ? undefined : { scale: 0.985 };
+
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col sm:flex-row items-stretch justify-center gap-4 pt-3">
-      {/* Straight Action (Hiçbir Şey Yapma) */}
-      <button
-        onClick={() => {
-          playTinyClick();
-          onMakeDecision('straight');
-        }}
+    <div className="w-full max-w-2xl mx-auto flex flex-col sm:flex-row items-stretch justify-center gap-4 pt-6">
+      <motion.button
+        onClick={() => onMakeDecision('straight')}
         disabled={disabled}
-        className={`flex-1 py-4 px-5 rounded-xl border-2 text-left transition-all duration-150 group flex items-start gap-3.5 ${
-          !leverPulled
-            ? 'border-[#2A2520] bg-[#F4EDDF] flat-shadow hover:translate-x-[1px] hover:translate-y-[1px]'
-            : 'border-[#6B6154]/50 bg-[#E7DCC5]/40 opacity-75'
+        data-hover-sound
+        whileHover={hover}
+        whileTap={tap}
+        className={`choice-card flex items-start gap-4 group ${
+          !leverPulled ? '' : 'choice-card--muted'
         } disabled:cursor-not-allowed disabled:opacity-50`}
       >
-        <div className="p-2.5 rounded-lg bg-[#E7DCC5] text-[#2A2520] border border-[#2A2520] shrink-0 mt-0.5">
+        <div className="choice-card__icon">
           <ShieldAlert className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-base text-[#2A2520] font-headline group-hover:text-[#D5472F] transition-colors">
+            <span className="font-headline text-base font-bold text-[#2A2520] group-hover:text-[#8A6222] transition-colors">
               {dilemma.straightActionLabel}
             </span>
-            <span className="text-[11px] font-label text-[#6B6154] shrink-0">
-              {dilemma.conceptualChoice ? '[1. SEÇİM]' : '[DÜZ YOL]'}
+            <span className="micro-label text-[#7A6F60] shrink-0">
+              {dilemma.conceptualChoice ? '[1. SEÇİM]' : '[1 · DÜZ YOL]'}
             </span>
           </div>
-          <p className="text-xs text-[#6B6154] mt-1 line-clamp-2">
-            {dilemma.conceptualChoice ? `Sonuç: ${dilemma.straightTrack.label}` : `Tramvay ana yoldan sapmaz: ${dilemma.straightTrack.label} hedefte kalır.`}
+          <p className="text-xs text-[#6B6154] mt-1.5 line-clamp-2">
+            {dilemma.conceptualChoice
+              ? `Sonuç: ${dilemma.straightTrack.label}`
+              : `Tramvay ana yoldan sapmaz: ${dilemma.straightTrack.label} hedefte kalır.`}
           </p>
         </div>
-      </button>
+      </motion.button>
 
-      {/* Diverted Action (Kolu Çek) */}
-      <button
-        onClick={() => {
-          playTinyClick();
-          if (!leverPulled) {
-            onLeverToggle();
-          }
-          onMakeDecision('diverted');
-        }}
+      <motion.button
+        onClick={() => onMakeDecision('diverted')}
         disabled={disabled}
-        className={`flex-1 py-4 px-5 rounded-xl border-2 text-left transition-all duration-150 group flex items-start gap-3.5 ${
-          leverPulled
-            ? 'border-[#D5472F] bg-[#F4EDDF] ring-2 ring-[#D5472F]/30 flat-shadow'
-            : 'border-[#2A2520] bg-[#F4EDDF] flat-shadow hover:border-[#D5472F]'
+        data-hover-sound
+        whileHover={hover}
+        whileTap={tap}
+        className={`choice-card flex items-start gap-4 group ${
+          leverPulled ? 'choice-card--active' : ''
         } disabled:cursor-not-allowed disabled:opacity-50`}
       >
-        <div className="p-2.5 rounded-lg bg-[#D5472F] text-[#F4EDDF] border border-[#2A2520] shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+        <div className="choice-card__icon choice-card__icon--accent">
           <GitFork className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-base text-[#2A2520] font-headline group-hover:text-[#D5472F] transition-colors">
+            <span className="font-headline text-base font-bold text-[#2A2520] group-hover:text-[#A23A26] transition-colors">
               {dilemma.divertedActionLabel}
             </span>
-            <span className="text-[11px] font-label text-[#D5472F] font-bold shrink-0">
-              {dilemma.conceptualChoice ? '[2. SEÇİM]' : '[MAKAS ÇEK]'}
+            <span className="micro-label text-[#A23A26] font-semibold shrink-0">
+              {dilemma.conceptualChoice ? '[2. SEÇİM]' : '[2 · MAKAS ÇEK]'}
             </span>
           </div>
-          <p className="text-xs text-[#6B6154] mt-1 line-clamp-2">
-            {dilemma.conceptualChoice ? `Sonuç: ${dilemma.divertedTrack.label}` : `Kolu çekip yönü değiştirir: ${dilemma.divertedTrack.label} hedef olur.`}
+          <p className="text-xs text-[#6B6154] mt-1.5 line-clamp-2">
+            {dilemma.conceptualChoice
+              ? `Sonuç: ${dilemma.divertedTrack.label}`
+              : `Kolu çekip yönü değiştirir: ${dilemma.divertedTrack.label} hedef olur.`}
           </p>
         </div>
-      </button>
+      </motion.button>
     </div>
   );
 };
