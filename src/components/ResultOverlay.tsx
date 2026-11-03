@@ -6,8 +6,7 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Dilemma, Decision } from '../types.ts';
-import { ArrowRight, CheckCircle2, MessageSquare, ShieldCheck, Skull } from 'lucide-react';
-import { playPremiumTransition } from '../utils/audio.ts';
+import { ArrowRight, MessageSquare, ShieldCheck } from 'lucide-react';
 
 interface ResultOverlayProps {
   dilemma: Dilemma;
@@ -33,86 +32,93 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
   const savedTarget = leverPulled ? dilemma.straightTrack : dilemma.divertedTrack;
   const lostTarget = leverPulled ? dilemma.divertedTrack : dilemma.straightTrack;
 
-  const handleNextClick = () => {
-    playPremiumTransition();
-    onNext();
-  };
-
   const container = reduceMotion
     ? { hidden: {}, show: {} }
-    : { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.06 } } };
+    : { hidden: {}, show: { transition: { staggerChildren: 0.075, delayChildren: 0.05 } } };
 
   const item = reduceMotion
     ? { hidden: {}, show: {} }
     : {
-        hidden: { opacity: 0, y: 14 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
+        hidden: { opacity: 0, y: 12 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
       };
+
+  const stamp = dilemma.conceptualChoice
+    ? 'Seçim yapıldı'
+    : leverPulled
+      ? 'Makas değişti'
+      : 'Doğal akış';
 
   return (
     <motion.div
       variants={container}
       initial="hidden"
       animate="show"
-      className="result-card paper-card blueprint-result w-full max-w-2xl mx-auto mt-6"
+      className="verdict w-full"
+      role="region"
+      aria-label="Karar sonucu"
     >
-      <motion.div variants={item} className="result-header">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-[#2F8478]" />
-          <span className="font-headline text-base font-bold text-[#2A2520]">
-            Kararın: <span className="text-[#A23A26]">{leverPulled ? dilemma.divertedActionLabel : dilemma.straightActionLabel}</span>
+      <motion.div variants={item} className="verdict__head">
+        <div>
+          <div className="verdict__eyebrow">Kararın</div>
+          <div className="verdict__title">
+            <b>{leverPulled ? dilemma.divertedActionLabel : dilemma.straightActionLabel}</b>
+          </div>
+        </div>
+        <span className="verdict__stamp">{stamp}</span>
+      </motion.div>
+
+      <div className="verdict__body">
+        <motion.div variants={item} className="verdict__cols">
+          <div className="verdict__col verdict__col--save">
+            <div className="verdict__col-label">
+              <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.5} />
+              <span>{dilemma.conceptualChoice ? 'Korunan' : 'Kurtarılan'}</span>
+            </div>
+            <div className="verdict__col-name">{savedTarget.label}</div>
+            <p className="verdict__col-desc">{savedTarget.description}</p>
+          </div>
+
+          <div className="verdict__col verdict__col--lose">
+            <div className="verdict__col-label">
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'inline-block',
+                  width: 9,
+                  height: 9,
+                  background: 'currentColor',
+                  clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+                }}
+              />
+              <span>{dilemma.conceptualChoice ? 'Sonuç' : 'Feda edilen'}</span>
+            </div>
+            <div className="verdict__col-name">{lostTarget.label}</div>
+            <p className="verdict__col-desc">{lostTarget.description}</p>
+          </div>
+        </motion.div>
+
+        <motion.blockquote variants={item} className="verdict__quote">
+          “{commentary}”
+        </motion.blockquote>
+
+        <motion.div variants={item} className="verdict__chat">
+          <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" strokeWidth={2.2} />
+          <span>
+            <b>Sohbet:</b> {dilemma.chatReaction}
           </span>
-        </div>
-        <span className="micro-label text-[#7A6F60]">
-          {dilemma.conceptualChoice ? 'SEÇİM YAPILDI' : leverPulled ? 'MAKAS DEĞİŞTİRİLDİ' : 'DOĞAL AKIŞA BIRAKILDI'}
-        </span>
-      </motion.div>
-      <motion.div
-        initial={reduceMotion ? {} : { scaleX: 0 }}
-        animate={{ scaleX: 1 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.9, ease: EASE, delay: 0.12 }}
-        className="result-rule origin-left"
-      />
+        </motion.div>
 
-      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-5">
-        <div className="result-tile blueprint-tile">
-          <div className="flex items-center gap-1.5 micro-label text-[#2F8478] mb-2">
-            <ShieldCheck className="w-4 h-4" />
-            <span>{dilemma.conceptualChoice ? 'KORUNAN:' : 'KURTARILAN:'}</span>
-          </div>
-          <div className="font-headline text-sm font-bold text-[#2A2520]">{savedTarget.label}</div>
-          <p className="text-[11px] text-[#6B6154] mt-1 leading-relaxed">{savedTarget.description}</p>
-        </div>
-
-        <div className="result-tile blueprint-tile">
-          <div className="flex items-center gap-1.5 micro-label text-[#A23A26] mb-2">
-            <Skull className="w-4 h-4" />
-            <span>{dilemma.conceptualChoice ? 'SONUÇ:' : 'FEDA EDİLEN / ZAYİAT:'}</span>
-          </div>
-          <div className="font-headline text-sm font-bold text-[#A23A26]">{lostTarget.label}</div>
-          <p className="text-[11px] text-[#6B6154] mt-1 leading-relaxed">{lostTarget.description}</p>
-        </div>
-      </motion.div>
-
-      <motion.div variants={item} className="ink-band blueprint-caption">
-        <p className="font-display text-lg leading-relaxed">“{commentary}”</p>
-      </motion.div>
-
-      <motion.div variants={item} className="chat-note mt-4">
-        <MessageSquare className="w-4 h-4 shrink-0" />
-        <span>{dilemma.chatReaction}</span>
-      </motion.div>
-
-      <motion.div variants={item} className="mt-6 flex justify-end">
-        <button
-          onClick={handleNextClick}
-          data-hover-sound
-          className="btn-primary w-full sm:w-auto"
-        >
-          <span>{isLast ? 'Ahlaki Sicil Karneni Gör' : 'Sonraki İkilem'}</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </motion.div>
+        <motion.div variants={item} className="verdict__actions">
+          <span className="verdict__next-hint">
+            Enter ile ilerle
+          </span>
+          <button onClick={onNext} className="btn btn--primary btn--lg">
+            <span>{isLast ? 'Ahlaki sicil karnesi' : 'Sonraki ikilem'}</span>
+            <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        </motion.div>
+      </div>
     </motion.div>
   );
 };

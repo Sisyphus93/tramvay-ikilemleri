@@ -13,7 +13,6 @@ import {
   Copy,
   Check,
   Award,
-  Skull,
   ChevronDown,
   ChevronUp,
   ShieldCheck,
@@ -42,7 +41,6 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const totalLeverPulls = history.filter((h) => h.leverPulled).length;
 
   const getArchetype = () => {
-    // Ratios keep thresholds meaningful regardless of lineup length or order.
     const leverPullRatio = totalLeverPulls / DILEMMAS.length;
     const savedPet = history.find((h) => h.dilemmaId === 11 && !h.leverPulled);
     const killedPet = history.find((h) => h.dilemmaId === 11 && h.leverPulled);
@@ -74,7 +72,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
       return {
         title: 'Acımasız Rasyonalist',
         badge: 'SOĞUKKANLI HESAPÇI',
-        desc: 'Evcil hayvanını bile bir yabancı uğruna feda ettin. Chat senden korkuyor.',
+        desc: 'Evcil hayvanını bile bir yabancı uğruna feda ettin. Sohbet senden korkuyor.',
       };
     }
     if (leverPullRatio >= 0.58) {
@@ -93,8 +91,8 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
     }
     return {
       title: 'Dengeli Türk Yayıncısı',
-      badge: 'CHATLE YAŞAYAN',
-      desc: 'Hem chatin gönlünü aldın hem de kritik anlarda doğru makası çektin. Felsefeyi çözdün sayılır.',
+      badge: 'SOHBETLE YAŞAYAN',
+      desc: 'Hem sohbetin gönlünü aldın hem de kritik anlarda doğru makası çektin. Felsefeyi çözdün sayılır.',
     };
   };
 
@@ -102,7 +100,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const handleCopy = () => {
     playSoftTick(1);
-    const text = `🚋 ABSÜRT TRAMVAY İKİLEMLERİ — SICİL RAPORUM 🚋\nUnvanım: ${archetype.title} (${archetype.badge})\n💀 Toplam Zayiat: ${totalDeaths} Can Kaybı\n⚡ Makas Tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
+    const text = `🚋 ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM 🚋\nUnvanım: ${archetype.title} (${archetype.badge})\n💀 Toplam Zayiat: ${totalDeaths} Can Kaybı\n⚡ Makas Tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
 
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -112,13 +110,13 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const container = reduceMotion
     ? { hidden: {}, show: {} }
-    : { hidden: {}, show: { transition: { staggerChildren: 0.1, delayChildren: 0.06 } } };
+    : { hidden: {}, show: { transition: { staggerChildren: 0.085, delayChildren: 0.05 } } };
 
   const item = reduceMotion
     ? { hidden: {}, show: {} }
     : {
-        hidden: { opacity: 0, y: 18 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: EASE } },
+        hidden: { opacity: 0, y: 16 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
       };
 
   return (
@@ -126,78 +124,92 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
       variants={container}
       initial="hidden"
       animate="show"
-      className="blueprint-summary w-full max-w-3xl mx-auto"
+      className="report w-full"
     >
-      <motion.div variants={item} className="summary-header">
-        <span className="micro-label text-[#8A6222] tracking-widest">
-          AHLAKİ &amp; FELSEFİ SİCİL KARNESİ
-        </span>
-        <h1>Felsefeyi Çözdün!</h1>
-        <p className="text-[#655B4E] text-sm max-w-lg mx-auto mt-3 leading-relaxed">
-          <span className="numeral">{DILEMMAS.length}</span> absürt tramvay ikilemini geride bıraktın. İşte verdiğin kararların toplumsal ve ahlaki bilançosu:
+      <motion.div variants={item} className="report__head">
+        <div className="q__topline" style={{ marginBottom: 12 }}>
+          <span className="poster__kicker-tag">Rapor · 27 / 27</span>
+          <span className="micro-label">Ahlaki sicil</span>
+        </div>
+        <h1 className="report__title">
+          Felsefeyi
+          <br />
+          çözdün<span style={{ color: 'var(--red)' }}>!</span>
+        </h1>
+        <p className="report__lede">
+          <span className="numeral">{DILEMMAS.length}</span> absürt ikilemin ardından makas kolu
+          artık senin adına bir şeyler söylüyor. İşte kararlarının toplumsal ve ahlaki bilançosu.
         </p>
       </motion.div>
 
       <motion.div
         variants={item}
-        initial={reduceMotion ? {} : { opacity: 0, scale: 0.95, rotate: -1.2 }}
-        animate={{ opacity: 1, scale: 1, rotate: 0 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.9, ease: EASE }}
-        className="stamp blueprint-stamp my-7"
+        initial={reduceMotion ? {} : { opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.8, ease: EASE }}
+        className="archetype"
       >
-        <div className="badge-pill micro-label">
-          <Award className="w-3.5 h-3.5" />
+        <span className="archetype__mark" aria-hidden="true">
+          No. 27 / Sicil
+        </span>
+        <span className="archetype__badge">
+          <Award className="w-3 h-3" strokeWidth={2.5} />
           <span>{archetype.badge}</span>
-        </div>
-        <h2 className="font-display text-3xl sm:text-4xl font-semibold text-[#2A2520] mt-4">
-          {archetype.title}
-        </h2>
-        <p className="text-sm text-[#5E5447] max-w-md mx-auto leading-relaxed mt-3">
-          {archetype.desc}
-        </p>
+        </span>
+        <h2 className="archetype__title">{archetype.title}</h2>
+        <p className="archetype__desc">{archetype.desc}</p>
       </motion.div>
 
-      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-7">
-        <div className="stat-card blueprint-stat">
-          <div className="flex items-center justify-center gap-1.5 micro-label text-[#7A6F60]">
-            <Skull className="w-4 h-4 text-[#A23A26]" />
-            <span>TOPLAM ZAYİAT</span>
-          </div>
-          <div className="numeral text-3xl font-semibold text-[#2A2520] tabular-nums mt-2">
-            {totalDeaths} <span className="text-xs font-sans font-normal text-[#6B6154]">can</span>
+      <motion.div variants={item} className="stats">
+        <div className="stat stat--bad">
+          <div className="stat__label">Toplam zayiat</div>
+          <div className="stat__value">
+            {totalDeaths}
+            <span className="stat__unit">can</span>
           </div>
         </div>
 
-        <div className="stat-card blueprint-stat">
-          <div className="micro-label text-[#7A6F60]">KOLU ÇEKTİ</div>
-          <div className="numeral text-3xl font-semibold text-[#A23A26] tabular-nums mt-2">
-            {totalLeverPulls} <span className="text-xs font-sans font-normal text-[#6B6154]">kez</span>
+        <div className="stat">
+          <div className="stat__label">Kolu çekti</div>
+          <div className="stat__value">
+            {totalLeverPulls}
+            <span className="stat__unit">kez</span>
           </div>
         </div>
 
-        <div className="stat-card blueprint-stat">
-          <div className="micro-label text-[#7A6F60]">HİÇBİR ŞEY YAPMADI</div>
-          <div className="numeral text-3xl font-semibold text-[#2F8478] tabular-nums mt-2">
-            {DILEMMAS.length - totalLeverPulls} <span className="text-xs font-sans font-normal text-[#6B6154]">kez</span>
+        <div className="stat">
+          <div className="stat__label">Hiçbir şey yapmadı</div>
+          <div className="stat__value">
+            {DILEMMAS.length - totalLeverPulls}
+            <span className="stat__unit">kez</span>
           </div>
         </div>
       </motion.div>
 
-      <motion.div variants={item} className="my-7 paper-card blueprint-details overflow-hidden">
+      <motion.div variants={item} className="ledger">
         <button
           onClick={() => {
             playSoftTick(0);
             setShowDetails(!showDetails);
           }}
           data-hover-sound
-          className="w-full py-4 px-5 flex items-center justify-between text-left font-headline text-sm font-bold text-[#2A2520] hover:bg-[#E7DCC5]/50 transition-colors duration-500"
+          aria-expanded={showDetails}
+          className="ledger__head"
         >
-          <span><span className="numeral">{DILEMMAS.length}</span> İkilemdeki Tercihlerinin Tam Dökümü</span>
-          {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span>
+            <span className="numeral">{DILEMMAS.length}</span> ikilemin tam dökümü
+          </span>
+          <span className="ledger__head-icon">
+            {showDetails ? (
+              <ChevronUp className="w-4 h-4" strokeWidth={2.5} />
+            ) : (
+              <ChevronDown className="w-4 h-4" strokeWidth={2.5} />
+            )}
+          </span>
         </button>
 
         {showDetails && (
-          <div className="border-t border-[#B8893B]/30">
+          <div>
             {history.map((h, idx) => {
               const dilemma = DILEMMAS.find((d) => d.id === h.dilemmaId);
               if (!dilemma) return null;
@@ -206,25 +218,22 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
               const lostTarget = isLever ? dilemma.divertedTrack : dilemma.straightTrack;
 
               return (
-                <div key={idx} className="detail-row blueprint-detail flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <div className="space-y-1">
-                    <div className="font-headline text-sm font-bold text-[#2A2520]">{dilemma.title}</div>
-                    <p className="text-[#6B6154]">
-                      Tercihin:{' '}
-                      <strong className={isLever ? 'text-[#A23A26]' : 'text-[#2A2520]'}>
-                        {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
-                      </strong>
-                    </p>
+                <div key={idx} className="ledger__row">
+                  <div>
+                    <div className="ledger__name">
+                      {String(idx + 1).padStart(2, '0')} · {dilemma.conceptualChoice ? 'KAVRAMSAL' : 'MAKAS'}
+                    </div>
+                    <div className="ledger__choice">
+                      {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="inline-flex items-center gap-1 text-[#2F8478] font-medium">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      {dilemma.conceptualChoice ? 'Korunan' : 'Kurtulan'}: {savedTarget.label}
+                  <div className="ledger__outcome">
+                    <span className="ledger__save">
+                      <ShieldCheck className="w-3 h-3" strokeWidth={2.6} />
+                      {savedTarget.label}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[#A23A26] font-medium">
-                      <Skull className="w-3.5 h-3.5" />
-                      {dilemma.conceptualChoice ? 'Sonuç' : 'Zayiat'}: {lostTarget.label}
-                    </span>
+                    <span style={{ color: 'var(--ink-faint)' }}>→</span>
+                    <span className="ledger__lose">{lostTarget.label}</span>
                   </div>
                 </div>
               );
@@ -233,10 +242,14 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         )}
       </motion.div>
 
-      <motion.div variants={item} className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-        <button onClick={handleCopy} data-hover-sound className="btn-primary w-full sm:w-auto">
-          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          <span>{copied ? 'Sicil Panoya Kopyalandı!' : 'Sicilimi Kopyala & Paylaş'}</span>
+      <motion.div variants={item} className="report__actions">
+        <button onClick={handleCopy} data-hover-sound className="btn btn--primary">
+          {copied ? (
+            <Check className="w-3.5 h-3.5" strokeWidth={3} />
+          ) : (
+            <Copy className="w-3.5 h-3.5" strokeWidth={2.5} />
+          )}
+          <span>{copied ? 'Panoya kopyalandı' : 'Sicilimi kopyala'}</span>
         </button>
 
         <button
@@ -245,10 +258,10 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
             onRestart();
           }}
           data-hover-sound
-          className="btn-secondary w-full sm:w-auto"
+          className="btn"
         >
-          <RotateCcw className="w-4 h-4" />
-          <span>Yeniden Oyna</span>
+          <RotateCcw className="w-3.5 h-3.5" strokeWidth={2.5} />
+          <span>Yeniden oyna</span>
         </button>
       </motion.div>
     </motion.div>

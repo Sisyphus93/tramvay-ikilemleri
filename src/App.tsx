@@ -30,6 +30,25 @@ type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
+/**
+ * Dilemmas read as "setup. question?" — splitting them lets the question
+ * carry the visual weight instead of one undifferentiated paragraph.
+ */
+const splitQuestion = (question: string): { setup: string; ask: string } => {
+  const normalized = question.trim();
+  const inner = normalized.endsWith('?') ? normalized.slice(0, -1) : normalized;
+  const cut = inner.lastIndexOf('. ');
+  const colon = inner.lastIndexOf(': ');
+
+  if (cut > 20 && cut > colon) {
+    return { setup: `${inner.slice(0, cut + 1)}`, ask: `${inner.slice(cut + 2)}?` };
+  }
+  if (colon > 20) {
+    return { setup: '', ask: normalized };
+  }
+  return { setup: '', ask: normalized };
+};
+
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('TITLE');
   const [currentStep, setCurrentStep] = useState<number>(0);
@@ -41,15 +60,6 @@ export default function App() {
   const [soundEnabled, setSoundState] = useState<boolean>(() => getSoundEnabled());
   const lastHoverRef = useRef(0);
   const reduceMotion = useReducedMotion();
-
-  useEffect(() => {
-    document.documentElement.classList.remove('dark');
-    try {
-      localStorage.removeItem('tramvay_theme');
-    } catch {
-      // Ignore
-    }
-  }, []);
 
   useEffect(() => {
     const startOnFirstGesture = () => {
@@ -70,7 +80,7 @@ export default function App() {
       const target = e.target as Element | null;
       if (!target || !target.closest?.('[data-hover-sound]')) return;
       const now = performance.now();
-      if (now - lastHoverRef.current < 110) return;
+      if (now - lastHoverRef.current < 140) return;
       lastHoverRef.current = now;
       playHoverTick();
     };
@@ -152,8 +162,10 @@ export default function App() {
       setLeverPulled(false);
       setShowResult(false);
       setIsAnimating(false);
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setGameState('SUMMARY');
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [currentStep]);
 
@@ -166,14 +178,30 @@ export default function App() {
     setIsAnimating(false);
     setHistory([]);
     setGameState('TITLE');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
+
+  /** Stage a route without committing to a decision (mirrors the physical lever). */
+  const onSelectRoute = useCallback(
+    (route: Decision) => {
+      if (isAnimating || showResult) return;
+      const next = route === 'diverted';
+      if (next === leverPulled) return;
+      setLeverPulled(next);
+      playLeverSnap();
+    },
+    [isAnimating, showResult, leverPulled]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'm' || e.key === 'M') {
         toggleSound();
+      } else if (gameState === 'TITLE' && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        handleStart();
       } else if (gameState === 'PLAYING') {
         if (showResult && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault();
@@ -201,37 +229,41 @@ export default function App() {
     handleMakeDecision,
     handleLeverToggle,
     toggleSound,
+    handleStart,
   ]);
 
   const screenMotion = reduceMotion
     ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
     : {
-        initial: { opacity: 0, y: 22, filter: 'blur(6px)' },
-        animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
-        exit: { opacity: 0, y: -16, filter: 'blur(4px)' },
-        transition: { duration: 0.72, ease: EASE },
+        initial: { opacity: 0, y: 14 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -10 },
+        transition: { duration: 0.5, ease: EASE },
       };
 
   const stepMotion = reduceMotion
     ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
     : {
-        initial: { opacity: 0, y: 14 },
+        initial: { opacity: 0, y: 12 },
         animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: -12 },
-        transition: { duration: 0.48, ease: EASE },
+        exit: { opacity: 0, y: -8 },
+        transition: { duration: 0.42, ease: EASE },
       };
 
   const controlMotion = reduceMotion
     ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
     : {
-        initial: { opacity: 0, y: 12 },
+        initial: { opacity: 0, y: 10 },
         animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: -10 },
-        transition: { duration: 0.42, ease: EASE },
+        exit: { opacity: 0, y: -8 },
+        transition: { duration: 0.36, ease: EASE },
       };
 
+  const { setup, ask } = splitQuestion(currentDilemma.question);
+  const chapterTitle = currentDilemma.title.replace(/^\s*\d+\.\s*İkilem:\s*/i, '');
+
   return (
-    <div className="app-shell min-h-screen flex flex-col relative">
+    <div className="app-shell">
       <div className="spotlight-layer" aria-hidden="true" />
       <div className="paper-grain-overlay" aria-hidden="true" />
 
@@ -245,21 +277,8 @@ export default function App() {
         isPlaying={gameState === 'PLAYING'}
       />
 
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
-        <div className="stage w-full">
-          <motion.div
-            key={`sheen-${gameState}`}
-            className="screen-sheen"
-            aria-hidden="true"
-            initial={reduceMotion ? { opacity: 0 } : { x: '-135%', opacity: 0 }}
-            animate={
-              reduceMotion
-                ? { opacity: 0 }
-                : { x: '135%', opacity: [0, 0.75, 0] }
-            }
-            transition={reduceMotion ? { duration: 0 } : { duration: 1.25, ease: EASE }}
-          />
-
+      <main className="screen-main">
+        <div className="stage">
           <AnimatePresence mode="wait" initial={false}>
             {gameState === 'TITLE' && (
               <motion.div key="title" {...screenMotion} className="w-full">
@@ -271,41 +290,117 @@ export default function App() {
               <motion.div key="playing" {...screenMotion} className="w-full">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div key={currentStep} {...stepMotion} className="w-full">
-                    <section className="question-card paper-card blueprint-question" aria-live="polite">
-                      <div className="micro-label question-card__kicker">
-                        İKİLEM <span className="numeral">{String(currentStep + 1).padStart(2, '0')}</span> / <span className="numeral">{DILEMMAS.length}</span>
+                    <section className="q">
+                      <div className="q__topline">
+                        <span className="q__step">
+                          İkilem{' '}
+                          <b className="numeral">
+                            {String(currentStep + 1).padStart(2, '0')}
+                          </b>
+                          <span style={{ color: 'var(--ink-faint)' }}>
+                            / {DILEMMAS.length}
+                          </span>
+                        </span>
+                        <span className="q__chapter">{chapterTitle}</span>
                       </div>
-                      <motion.div
-                        key={`rule-${currentStep}`}
-                        initial={reduceMotion ? {} : { scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={reduceMotion ? { duration: 0 } : { duration: 1, ease: EASE }}
-                        className="foil-rule mx-auto max-w-xs origin-center"
-                      />
-                      <h3 className="micro-label mt-4 text-[#8A6222]">
-                        {currentDilemma.title}
-                      </h3>
-                      <h2>{currentDilemma.question}</h2>
+
+                      <h1 className="q__title" aria-live="polite">
+                        {setup && <span className="q__setup">{setup} </span>}
+                        <span className="q__ask">{ask}</span>
+                      </h1>
+
                       {currentDilemma.conceptualChoice && (
-                        <p className="conceptual-note">
-                          Sahne seçimleri sembolik olarak gösterir; sonuçlar yukarıdaki senaryoya göredir.
+                        <p className="q__note">
+                          <span aria-hidden="true" style={{ color: 'var(--ochre)' }}>
+                            ●
+                          </span>
+                          <span>
+                            Sahne seçimleri sembolik olarak gösterir; sonuçlar yukarıdaki
+                            senaryoya göredir.
+                          </span>
                         </p>
                       )}
                     </section>
 
-                    <div className="canvas-frame">
-                      <span className="canvas-frame__label">
-                        PLAN <span className="numeral">{String(currentStep + 1).padStart(2, '0')}</span> / <span className="numeral">{DILEMMAS.length}</span> · MAKAS ŞEMASI
-                      </span>
-                      <span className="canvas-frame__hint">[BOŞLUK] MAKASI ÇEVİR</span>
-                      <TrolleyCanvas
-                        dilemma={currentDilemma}
-                        decision={decision}
-                        isAnimating={isAnimating}
-                        onAnimationEnd={handleAnimationEnd}
-                        leverPulled={leverPulled}
-                        onLeverToggle={handleLeverToggle}
-                      />
+                    <div className="board">
+                      <div className="board__head">
+                        <span>
+                          <span className="board__id">Plan {String(currentStep + 1).padStart(2, '0')}</span>
+                          {' · '}Makas Şeması
+                        </span>
+                        <span className="board__hint">[Boşluk] makası çevir</span>
+                      </div>
+
+                      <div className="board__stage">
+                        <TrolleyCanvas
+                          dilemma={currentDilemma}
+                          decision={decision}
+                          isAnimating={isAnimating}
+                          onAnimationEnd={handleAnimationEnd}
+                          leverPulled={leverPulled}
+                          onLeverToggle={handleLeverToggle}
+                        />
+                      </div>
+
+                      <div className="board__legend">
+                        <span className="legend-item">
+                          <span className="legend-swatch" aria-hidden="true" />
+                          Düz hat
+                        </span>
+                        <span className="legend-item">
+                          <span className="legend-swatch legend-swatch--alt" aria-hidden="true" />
+                          Makas hattı
+                        </span>
+                        <span className="legend-state">
+                          Aktif: {leverPulled ? 'Makas' : 'Düz'}
+                        </span>
+                      </div>
+
+                      <div className="routes">
+                        <button
+                          type="button"
+                          onClick={() => onSelectRoute('straight')}
+                          disabled={isAnimating}
+                          title={currentDilemma.straightTrack.label}
+                          data-hover-sound
+                          className={`route ${!leverPulled ? 'route--active' : ''}`}
+                        >
+                          <span className="route__tick" aria-hidden="true" />
+                          <span className="route__body">
+                            <span className="route__kicker">
+                              <span className="route__dot" aria-hidden="true" />
+                              Düz hat
+                            </span>
+                            <span className="route__name">{currentDilemma.straightTrack.label}</span>
+                          </span>
+                          <span className="route__count numeral">
+                            ×{currentDilemma.straightTrack.count}
+                            <span>{currentDilemma.straightTrack.count === 1 ? 'hedef' : 'canlı'}</span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => onSelectRoute('diverted')}
+                          disabled={isAnimating}
+                          title={currentDilemma.divertedTrack.label}
+                          data-hover-sound
+                          className={`route route--alt ${leverPulled ? 'route--active' : ''}`}
+                        >
+                          <span className="route__tick" aria-hidden="true" />
+                          <span className="route__body">
+                            <span className="route__kicker">
+                              <span className="route__dot" aria-hidden="true" />
+                              Makas hattı
+                            </span>
+                            <span className="route__name">{currentDilemma.divertedTrack.label}</span>
+                          </span>
+                          <span className="route__count numeral">
+                            ×{currentDilemma.divertedTrack.count}
+                            <span>{currentDilemma.divertedTrack.count === 1 ? 'hedef' : 'canlı'}</span>
+                          </span>
+                        </button>
+                      </div>
                     </div>
 
                     <AnimatePresence mode="wait" initial={false}>
@@ -343,14 +438,22 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="premium-footer">
-        <div className="foil-rule w-full mb-5 opacity-60" />
-        <div className="premium-footer__inner">
-          <span className="font-headline text-sm text-[#E8DFCC]">
-            Absürt Tramvay İkilemleri · Türkçe
-          </span>
-          <span className="micro-label">
-            <span className="numeral">[1]</span> DÜZ · <span className="numeral">[2]</span> MAKAS · [BOŞLUK] KOLU ÇEK · [M] SES
+      <footer className="site-footer">
+        <div className="site-footer__inner">
+          <span className="site-footer__brand">Absürt Tramvay İkilemleri · Türkçe</span>
+          <span className="kbd-row">
+            <span className="legend-item">
+              <span className="kbd">1</span> düz hat
+            </span>
+            <span className="legend-item">
+              <span className="kbd">2</span> makas
+            </span>
+            <span className="legend-item">
+              <span className="kbd">␣</span> kolu çek
+            </span>
+            <span className="legend-item">
+              <span className="kbd">M</span> ses
+            </span>
           </span>
         </div>
       </footer>
