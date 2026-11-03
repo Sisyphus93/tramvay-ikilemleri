@@ -93,7 +93,6 @@ export default function App() {
 
     const entry: PlayerHistoryEntry = {
       dilemmaId: currentDilemma.id,
-      isBonus: currentDilemma.isBonus,
       decision: decision || 'straight',
       leverPulled: decision === 'diverted',
       victimsLabel: chosenTrack.label,
