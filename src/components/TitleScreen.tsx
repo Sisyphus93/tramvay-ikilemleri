@@ -71,17 +71,17 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
       <div className="poster__grid">
         <div>
           <h1 className="poster__title">
-            <span className="line" style={{ overflow: 'hidden' }}>
+            <span className="line">
               <motion.span variants={titleRise} style={{ display: 'block' }}>
                 Absürt
               </motion.span>
             </span>
-            <span className="line" style={{ overflow: 'hidden' }}>
+            <span className="line">
               <motion.span variants={titleRise} style={{ display: 'block' }}>
                 <span className="accent">Tramvay</span>
               </motion.span>
             </span>
-            <span className="line" style={{ overflow: 'hidden' }}>
+            <span className="line">
               <motion.span variants={titleRise} style={{ display: 'block' }}>
                 İkilemleri
               </motion.span>
