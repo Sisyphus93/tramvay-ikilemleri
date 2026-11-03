@@ -75,6 +75,32 @@ const ENTITY_META = {
 const easeInOutCubic = (p: number) =>
   p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 
+/* Scene geometry (viewBox 880 × 420) */
+const VIEW_W = 880;
+const VIEW_H = 420;
+const RAIL_Y = 215;
+const JUNCTION_X = 310;
+const STRAIGHT_Y = 132;
+const DIVERTED_Y = 288;
+const START_X = 78;
+const STOP_X = 622;
+const PLATE_X = 792;
+const PLATE_W = 136;
+const PLATE_H = 76;
+
+const INK = '#171512';
+const RED = '#d4452b';
+const TEAL = '#2e7d6e';
+const BLUE = '#2c5f8a';
+const OCHRE = '#c98a2e';
+const PAPER = '#f2e9d8';
+const CARD = '#fbf4e4';
+
+const clamp = (label: string, max = 20) =>
+  label.toLocaleUpperCase('tr-TR').length > max
+    ? `${label.toLocaleUpperCase('tr-TR').slice(0, max - 1).trimEnd()}…`
+    : label.toLocaleUpperCase('tr-TR');
+
 export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   dilemma,
   decision,
@@ -126,312 +152,407 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
     setImpactHappened(false);
   }, [isAnimating, decision, onAnimationEnd]);
 
-  const calculateTramPosition = (p: number, path: Decision) => {
-    if (p <= 0.34) {
-      const localP = p / 0.34;
-      return { x: 60 + localP * 190, y: 160, angle: 0 };
+  const tramPosition = (p: number, path: Decision) => {
+    if (p <= 0.3) {
+      const localP = p / 0.3;
+      return { x: START_X + localP * (JUNCTION_X - 40 - START_X), y: RAIL_Y, angle: 0 };
     }
-    const localP = (p - 0.34) / 0.66;
-    const startX = 250;
-    const startY = 160;
-    const endX = 570;
-    const endY = path === 'straight' ? 106 : 242;
+    const localP = (p - 0.3) / 0.7;
+    const startX = JUNCTION_X - 40;
+    const endY = path === 'straight' ? STRAIGHT_Y : DIVERTED_Y;
     const bend = Math.sin((localP * Math.PI) / 2);
     return {
-      x: startX + localP * (endX - startX),
-      y: startY + (endY - startY) * bend,
-      angle: (path === 'straight' ? -9 : 9) * Math.sin(localP * Math.PI),
+      x: startX + localP * (STOP_X - startX),
+      y: RAIL_Y + (endY - RAIL_Y) * bend,
+      angle: (path === 'straight' ? -6 : 6) * Math.sin(localP * Math.PI),
     };
   };
 
-  const effectivePath = decision || (leverPulled ? 'diverted' : 'straight');
-  const tramPos = calculateTramPosition(tramProgress, effectivePath);
+  const effectivePath: Decision = decision || (leverPulled ? 'diverted' : 'straight');
+  const tramPos = tramPosition(tramProgress, effectivePath);
   const straightActive = !leverPulled;
   const divertedActive = leverPulled;
 
-  const renderTargetEntity = (target: TrackTarget, isDiverted: boolean) => {
+  const renderTarget = (target: TrackTarget, isDiverted: boolean) => {
     const isHit =
       impactHappened &&
       ((isDiverted && decision === 'diverted') || (!isDiverted && decision === 'straight'));
     const meta = ENTITY_META[target.entityType];
-    const shownCount = Math.max(1, Math.min(target.count, 5));
-    const label = target.label.toUpperCase();
+    const shownCount = Math.max(1, Math.min(target.count, 4));
+    const y = isDiverted ? DIVERTED_Y : STRAIGHT_Y;
 
     return (
-      <g className={`blueprint-medallion ${isHit ? 'blueprint-medallion--hit' : ''}`}>
-        <circle className="blueprint-medallion__shadow" cx="0" cy="4" r="36" />
-        <circle className="blueprint-medallion__ring" cx="0" cy="0" r="34" />
-        <circle className="blueprint-medallion__inner" cx="0" cy="0" r="27" />
-        <circle className="blueprint-medallion__pivot" cx="0" cy="0" r="2" />
+      <g className={`blueprint-medallion ${isHit ? 'blueprint-medallion--hit' : ''}`} transform={`translate(${PLATE_X}, ${y})`}>
+        <g className="blueprint-medallion__shake">
+          {/* terminal plate */}
+          <rect
+            x={-PLATE_W / 2}
+            y={-PLATE_H / 2}
+            width={PLATE_W}
+            height={PLATE_H}
+            rx="5"
+            fill={isHit ? '#f7dcd2' : CARD}
+            stroke={INK}
+            strokeWidth="3"
+          />
 
-        {meta.kind === 'human' && (
-          <g className="blueprint-medallion__pins">
-            {Array.from({ length: shownCount }).map((_, i) => {
-              const x = (i - (shownCount - 1) / 2) * 9;
-              return (
-                <g key={i} transform={`translate(${x}, 0)`}>
-                  <circle cx="0" cy="-9" r="2.4" className="blueprint-pin__head" />
-                  <path d="M 0 -6 L 0 7 M -4 0 L 4 0 M -3 11 L 0 7 L 3 11" className="blueprint-pin__body" />
-                </g>
-              );
-            })}
-          </g>
-        )}
+          {/* pictogram well */}
+          <circle cx="-32" cy="0" r="23" fill="none" stroke={INK} strokeWidth="1.4" strokeDasharray="2 3.5" opacity="0.45" />
 
-        {meta.kind === 'object' && (
-          <g className="blueprint-medallion__object">
-            <rect x="-12" y="-12" width="24" height="24" rx="2" transform="rotate(45)" className="blueprint-object__plate" />
-            <text x="0" y="3" textAnchor="middle" className="blueprint-code">
-              {meta.code}
-            </text>
-          </g>
-        )}
+          {meta.kind === 'human' && (
+            <g>
+              {Array.from({ length: shownCount }).map((_, i) => {
+                const step = shownCount > 2 ? 9 : 12;
+                const x = -32 + (i - (shownCount - 1) / 2) * step;
+                return (
+                  <g key={i} transform={`translate(${x}, 0)`}>
+                    <circle cx="0" cy="-9" r="3.4" fill={RED} stroke={INK} strokeWidth="1.2" />
+                    <path
+                      d="M 0 -5 L 0 8 M -4.5 -0.5 L 4.5 -0.5 M -3.4 13 L 0 8 L 3.4 13"
+                      fill="none"
+                      stroke={INK}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
-        {meta.kind === 'cat' && (
-          <g className="blueprint-medallion__cat">
-            <path d="M -15 10 Q -15 -4 -8 -8 L -10 -16 L -2 -10 Q 0 -11 2 -10 L 10 -16 L 8 -8 Q 15 -4 15 10 Z" className="blueprint-cat__outline" />
-            <path d="M -15 10 Q 0 16 15 10" className="blueprint-cat__outline" />
-          </g>
-        )}
+          {meta.kind === 'object' && (
+            <g>
+              <rect x="-45" y="-13" width="26" height="26" rx="2" fill="rgba(44,95,138,.12)" stroke={BLUE} strokeWidth="1.8" />
+              <text
+                x="-32"
+                y="3.5"
+                textAnchor="middle"
+                fill={BLUE}
+                style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 8.5, fontWeight: 600 }}
+              >
+                {meta.code}
+              </text>
+            </g>
+          )}
 
-        {meta.kind === 'abstract' && (
-          <g className="blueprint-medallion__abstract">
-            <circle cx="0" cy="0" r="14" className="blueprint-abstract__arc" />
-            <circle cx="0" cy="0" r="8" className="blueprint-abstract__arc" />
-            <path d="M 0 -18 L 6 -12 L 0 -6 L -6 -12 Z" className="blueprint-abstract__diamond" />
-          </g>
-        )}
+          {meta.kind === 'cat' && (
+            <g transform="translate(-32, 1)">
+              <path
+                d="M -14 9 Q -14 -4 -8 -8 L -10 -16 L -2.5 -10.5 Q 0 -11 2.5 -10.5 L 10 -16 L 8 -8 Q 14 -4 14 9 Z"
+                fill="rgba(201,138,46,.2)"
+                stroke={OCHRE}
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+              <path d="M -14 9 Q 0 15 14 9" fill="none" stroke={OCHRE} strokeWidth="2" />
+            </g>
+          )}
 
-        <text x="0" y="49" textAnchor="middle" className="blueprint-count">
-          ×{target.count}
-        </text>
-        {target.count > 5 && (
-          <text x="0" y="-40" textAnchor="middle" className="blueprint-overflow">
-            +{target.count - 5}
+          {meta.kind === 'abstract' && (
+            <g transform="translate(-32, 0)">
+              <circle cx="0" cy="0" r="13" fill="none" stroke={BLUE} strokeWidth="1.8" opacity="0.7" />
+              <path d="M 0 -17 L 6 -11 L 0 -5 L -6 -11 Z" fill="rgba(44,95,138,.22)" stroke={BLUE} strokeWidth="1.8" />
+            </g>
+          )}
+
+          {/* count */}
+          <text
+            x="34"
+            y="4"
+            textAnchor="middle"
+            fill={INK}
+            style={{
+              fontFamily: '"IBM Plex Mono", monospace',
+              fontSize: target.count > 99 ? 19 : 24,
+              fontWeight: 600,
+              letterSpacing: '-0.03em',
+            }}
+          >
+            ×{target.count}
           </text>
-        )}
+          <text
+            x="34"
+            y="20"
+            textAnchor="middle"
+            fill="#6f6555"
+            style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 8, letterSpacing: '0.16em' }}
+          >
+            {target.count === 1 ? 'HEDEF' : 'CANLI'}
+          </text>
+
+          {isHit && (
+            <g opacity="0.85" stroke="#a8321d" strokeWidth="4" strokeLinecap="round">
+              <line x1="-52" y1="-20" x2="-12" y2="20" />
+              <line x1="-12" y1="-20" x2="-52" y2="20" />
+            </g>
+          )}
+        </g>
+
+        {/* plate caption */}
         <text
           x="0"
-          y="66"
+          y={PLATE_H / 2 + 21}
           textAnchor="middle"
-          textLength="150"
-          lengthAdjust="spacingAndGlyphs"
-          className="blueprint-label"
+          fill={isHit ? '#a8321d' : '#4a4238'}
+          stroke={PAPER}
+          strokeWidth="5"
+          strokeLinejoin="round"
+          style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, letterSpacing: '0.1em', fontWeight: 600 }}
         >
-          {label}
+          {clamp(target.label)}
         </text>
       </g>
     );
   };
 
+  const branchRail = (active: boolean) => ({
+    stroke: active ? INK : '#c3b49c',
+    strokeWidth: active ? 5 : 4,
+    transition: 'stroke .45s ease, stroke-width .45s ease',
+  });
+
   return (
-    <div className="canvas-inner blueprint-canvas relative w-full max-w-4xl mx-auto select-none">
-      <div className="blueprint-sheen" aria-hidden="true" />
+    <div className="blueprint-canvas relative w-full select-none">
       <svg
-        viewBox="0 0 720 320"
-        className="blueprint-svg w-full h-auto block"
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        className="blueprint-svg block"
+        width="100%"
+        style={{ height: 'auto', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
         role="img"
-        aria-label={`${dilemma.title} makas şeması`}
+        aria-label={`${dilemma.title}: ${dilemma.straightTrack.label} ve ${dilemma.divertedTrack.label} arasında makas şeması`}
       >
         <defs>
-          <linearGradient id="parchmentField" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#F9F3E8" />
-            <stop offset="55%" stopColor="#F4EDDF" />
-            <stop offset="100%" stopColor="#EADDC2" />
-          </linearGradient>
-          <linearGradient id="brassGradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#8A6222" />
-            <stop offset="45%" stopColor="#E6C77A" />
-            <stop offset="100%" stopColor="#B8893B" />
-          </linearGradient>
-          <radialGradient id="blueprintSpot" cx="38%" cy="8%" r="80%">
-            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.75" />
-            <stop offset="55%" stopColor="#E6C77A" stopOpacity="0.07" />
-            <stop offset="100%" stopColor="#B8893B" stopOpacity="0" />
-          </radialGradient>
-          <pattern id="blueprintGrid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#B8893B" strokeWidth="0.5" opacity="0.28" />
-            <path d="M 12 0 L 12 24 M 0 12 L 24 12" fill="none" stroke="#B8893B" strokeWidth="0.35" opacity="0.12" />
+          <pattern id="paperDots" width="18" height="18" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="1" fill={INK} opacity="0.06" />
           </pattern>
-          <filter id="brassGlow" x="-80%" y="-80%" width="260%" height="260%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <filter id="inkShadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#2A2520" floodOpacity="0.18" />
-          </filter>
+          <clipPath id="boardClip">
+            <rect x="0" y="0" width={VIEW_W} height={VIEW_H} />
+          </clipPath>
         </defs>
 
-        <rect width="720" height="320" fill="url(#parchmentField)" />
-        <rect width="720" height="320" fill="url(#blueprintGrid)" />
-        <rect width="720" height="320" fill="url(#blueprintSpot)" />
+        <rect width={VIEW_W} height={VIEW_H} fill={PAPER} />
+        <rect width={VIEW_W} height={VIEW_H} fill="url(#paperDots)" />
 
-        {/* Registration marks */}
-        <g className="blueprint-registration">
-          <path d="M 18 18 h 18 M 18 18 v 18" />
-          <path d="M 702 18 h -18 M 702 18 v 18" />
-          <path d="M 18 302 h 18 M 18 302 v -18" />
-          <path d="M 702 302 h -18 M 702 302 v -18" />
-        </g>
+        <g clipPath="url(#boardClip)">
+          {/* Ghost plan number */}
+          <text
+            x={VIEW_W / 2}
+            y={VIEW_H - 4}
+            textAnchor="middle"
+            fill={INK}
+            opacity="0.05"
+            style={{ fontFamily: 'Archivo, sans-serif', fontSize: 168, fontWeight: 900, letterSpacing: '-0.05em' }}
+          >
+            {String(dilemma.id).padStart(2, '0')}
+          </text>
 
-        {/* Measurement ticks */}
-        <g className="blueprint-ticks">
-          {Array.from({ length: 29 }).map((_, i) => {
-            const x = 24 + i * 24;
-            const major = i % 4 === 0;
-            return <line key={i} x1={x} y1="10" x2={x} y2={major ? 22 : 16} />;
-          })}
-          {Array.from({ length: 29 }).map((_, i) => {
-            const x = 24 + i * 24;
-            const major = i % 4 === 0;
-            return <line key={`b-${i}`} x1={x} y1="310" x2={x} y2={major ? 298 : 304} />;
-          })}
-        </g>
-
-        {/* Title block */}
-        <g className="blueprint-titleblock">
-          <text x="34" y="40" className="blueprint-label">
+          {/* Diagram header */}
+          <line x1="0" y1="56" x2={VIEW_W} y2="56" stroke={INK} strokeWidth="1.4" opacity="0.16" />
+          <text x="20" y="39" fill="#6f6555" style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em' }}>
             MAKAS ŞEMASI · PLAN {String(dilemma.id).padStart(2, '0')}
           </text>
-          <text x="34" y="55" className="blueprint-subcode">
-            ÖLÇEK 1:1 · {dilemma.conceptualChoice ? 'KAVRAMSAL SEÇİM' : 'FİZİKSEL YÖN'}
+          <text x={VIEW_W - 20} y="39" textAnchor="end" fill="#6f6555" style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em' }}>
+            {dilemma.conceptualChoice ? 'KAVRAMSAL SEÇİM' : 'FİZİKSEL YÖN'}
           </text>
-          <text x="686" y="40" textAnchor="end" className="blueprint-label">
-            TRAMVAY İKİLEMLERİ
-          </text>
-          <text x="686" y="55" textAnchor="end" className="blueprint-subcode">
-            REV. 27 · BRASS BLUEPRINT
-          </text>
-        </g>
-        <line x1="34" y1="64" x2="686" y2="64" className="blueprint-rule" />
 
-        {/* Ground / survey line */}
-        <path d="M 24 272 Q 360 266 696 272" className="blueprint-ground" />
-
-        {/* Approach rails */}
-        <g className="blueprint-rail-group">
-          <path d="M 40 150 L 250 150" className="blueprint-rail blueprint-rail--approach" />
-          <path d="M 40 170 L 250 170" className="blueprint-rail blueprint-rail--approach" />
-          {[56, 88, 120, 152, 184, 216].map((x) => (
-            <line key={x} x1={x} y1="144" x2={x} y2="176" className="blueprint-sleeper" />
-          ))}
-        </g>
-
-        {/* Straight branch */}
-        <g className={`blueprint-rail-group ${straightActive ? 'is-active' : ''}`}>
-          <path d="M 250 150 C 360 150, 450 96, 660 96" className="blueprint-rail blueprint-rail--straight" />
-          <path d="M 250 170 C 360 170, 450 116, 660 116" className="blueprint-rail blueprint-rail--straight" />
-          {straightActive && (
-            <>
-              <path d="M 250 150 C 360 150, 450 96, 660 96" className="blueprint-rail-highlight blueprint-rail-highlight--straight" />
-              <path d="M 250 170 C 360 170, 450 116, 660 116" className="blueprint-rail-highlight blueprint-rail-highlight--straight" />
-            </>
-          )}
-          {[276, 316, 356, 396, 436, 476, 516, 556, 596, 636].map((x, i) => {
-            const t = i / 9;
-            const y = 160 - 54 * Math.sin((t * Math.PI) / 2);
-            return <line key={`s-${x}`} x1={x} y1={y - 13} x2={x} y2={y + 13} className="blueprint-sleeper" transform={`rotate(${-8 * t}, ${x}, ${y})`} />;
-          })}
-        </g>
-
-        {/* Diverted branch */}
-        <g className={`blueprint-rail-group ${divertedActive ? 'is-active' : ''}`}>
-          <path d="M 250 150 C 360 150, 450 232, 660 232" className="blueprint-rail blueprint-rail--diverted" />
-          <path d="M 250 170 C 360 170, 450 252, 660 252" className="blueprint-rail blueprint-rail--diverted" />
-          {divertedActive && (
-            <>
-              <path d="M 250 150 C 360 150, 450 232, 660 232" className="blueprint-rail-highlight blueprint-rail-highlight--diverted" />
-              <path d="M 250 170 C 360 170, 450 252, 660 252" className="blueprint-rail-highlight blueprint-rail-highlight--diverted" />
-            </>
-          )}
-          {[276, 316, 356, 396, 436, 476, 516, 556, 596, 636].map((x, i) => {
-            const t = i / 9;
-            const y = 160 + 82 * Math.sin((t * Math.PI) / 2);
-            return <line key={`d-${x}`} x1={x} y1={y - 13} x2={x} y2={y + 13} className="blueprint-sleeper" transform={`rotate(${11 * t}, ${x}, ${y})`} />;
-          })}
-        </g>
-
-        {/* Switch blade */}
-        <g className="blueprint-switch">
-          <circle cx="250" cy="160" r="6" className="blueprint-switch__pivot" />
-          <g
-            className="blueprint-switch__blade-group"
-            transform={`rotate(${leverPulled ? 12 : -12} 250 160)`}
-          >
-            <line x1="250" y1="160" x2="288" y2="160" className="blueprint-switch__blade" />
+          {/* Approach */}
+          <g>
+            <line x1="18" y1={RAIL_Y - 12} x2={JUNCTION_X} y2={RAIL_Y - 12} stroke={INK} strokeWidth="5" strokeLinecap="round" />
+            <line x1="18" y1={RAIL_Y + 12} x2={JUNCTION_X} y2={RAIL_Y + 12} stroke={INK} strokeWidth="5" strokeLinecap="round" />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <line
+                key={i}
+                x1={40 + i * 46}
+                y1={RAIL_Y - 19}
+                x2={40 + i * 46}
+                y2={RAIL_Y + 19}
+                stroke="#a2937c"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              />
+            ))}
           </g>
-          <circle cx="250" cy="160" r="2" className="blueprint-switch__pin" />
-        </g>
 
-        {/* Upper target medallion */}
-        <g transform="translate(600, 106)">{renderTargetEntity(dilemma.straightTrack, false)}</g>
-
-        {/* Lower target medallion */}
-        <g transform="translate(600, 242)">{renderTargetEntity(dilemma.divertedTrack, true)}</g>
-
-        {/* Mechanical lever */}
-        <g
-          transform="translate(196, 252)"
-          className="blueprint-lever"
-          onClick={!isAnimating ? onLeverToggle : undefined}
-          data-hover-sound
-          role="button"
-          aria-label="Makas kolunu çevir"
-        >
-          <rect x="-22" y="-8" width="44" height="20" rx="3" className="blueprint-lever__base" />
-          <rect x="-18" y="-4" width="36" height="3" rx="1.5" className="blueprint-lever__trim" />
-          <circle cx="0" cy="0" r="5" className="blueprint-lever__pivot" />
-          <g transform={`rotate(${leverPulled ? 28 : -28})`} className="blueprint-lever__handle">
-            <line x1="0" y1="0" x2="0" y2="-44" className="blueprint-lever__stem" />
-            <circle cx="0" cy="-48" r="11" className="blueprint-lever__glow" filter="url(#brassGlow)" />
-            <circle cx="0" cy="-48" r="7" className="blueprint-lever__knob" />
+          {/* Straight branch */}
+          <g>
+            <path
+              d={`M ${JUNCTION_X} ${RAIL_Y - 12} C 430 ${RAIL_Y - 12}, 520 ${STRAIGHT_Y - 40}, 760 ${STRAIGHT_Y - 12}`}
+              fill="none"
+              style={branchRail(straightActive)}
+              strokeLinecap="round"
+            />
+            <path
+              d={`M ${JUNCTION_X} ${RAIL_Y + 12} C 430 ${RAIL_Y + 12}, 520 ${STRAIGHT_Y - 8}, 760 ${STRAIGHT_Y + 12}`}
+              fill="none"
+              style={branchRail(straightActive)}
+              strokeLinecap="round"
+            />
+            {straightActive && (
+              <path
+                d={`M ${JUNCTION_X} ${RAIL_Y} C 430 ${RAIL_Y}, 520 ${STRAIGHT_Y - 24}, 760 ${STRAIGHT_Y}`}
+                fill="none"
+                stroke={TEAL}
+                strokeWidth="1.8"
+                strokeDasharray="8 11"
+                strokeLinecap="round"
+                opacity="0.85"
+              />
+            )}
           </g>
-          <text x="30" y="4" className="blueprint-subcode">
-            MAKAS KOLU
-          </text>
-        </g>
 
-        {/* Legend */}
-        <g className="blueprint-legend">
-          <rect x="34" y="286" width="14" height="3" className="blueprint-legend__straight" />
-          <text x="54" y="291" className="blueprint-subcode">DÜZ HAT</text>
-          <rect x="128" y="286" width="14" height="3" className="blueprint-legend__diverted" />
-          <text x="148" y="291" className="blueprint-subcode">MAKAS HATTI</text>
-          <text x="686" y="291" textAnchor="end" className="blueprint-subcode">
-            {leverPulled ? 'AKTİF: MAKAS' : 'AKTİF: DÜZ'}
-          </text>
-        </g>
+          {/* Diverted branch */}
+          <g>
+            <path
+              d={`M ${JUNCTION_X} ${RAIL_Y - 12} C 430 ${RAIL_Y - 12}, 520 ${DIVERTED_Y + 8}, 760 ${DIVERTED_Y - 12}`}
+              fill="none"
+              style={branchRail(divertedActive)}
+              strokeLinecap="round"
+            />
+            <path
+              d={`M ${JUNCTION_X} ${RAIL_Y + 12} C 430 ${RAIL_Y + 12}, 520 ${DIVERTED_Y + 40}, 760 ${DIVERTED_Y + 12}`}
+              fill="none"
+              style={branchRail(divertedActive)}
+              strokeLinecap="round"
+            />
+            {divertedActive && (
+              <path
+                d={`M ${JUNCTION_X} ${RAIL_Y} C 430 ${RAIL_Y}, 520 ${DIVERTED_Y + 24}, 760 ${DIVERTED_Y}`}
+                fill="none"
+                stroke={RED}
+                strokeWidth="1.8"
+                strokeDasharray="8 11"
+                strokeLinecap="round"
+                opacity="0.9"
+              />
+            )}
+          </g>
 
-        {/* Art-deco tram */}
-        <g
-          transform={`translate(${tramPos.x}, ${tramPos.y}) rotate(${tramPos.angle})`}
-          className="blueprint-tram"
-          filter="url(#inkShadow)"
-        >
-          {isAnimating && (
-            <g className="blueprint-tram-trail">
-              <line x1="-72" y1="-8" x2="-48" y2="-8" />
-              <line x1="-84" y1="0" x2="-48" y2="0" />
-              <line x1="-72" y1="8" x2="-48" y2="8" />
+          {/* Junction switch */}
+          <g>
+            <circle cx={JUNCTION_X} cy={RAIL_Y} r="10" fill={PAPER} stroke={INK} strokeWidth="3" />
+            <g className="blueprint-switch__blade-group" style={{ transform: `rotate(${leverPulled ? 11 : -11}deg)` }}>
+              <line x1={JUNCTION_X} y1={RAIL_Y} x2={JUNCTION_X + 52} y2={RAIL_Y} stroke={INK} strokeWidth="5" strokeLinecap="round" />
             </g>
-          )}
-          <rect x="-44" y="-18" width="88" height="36" rx="6" className="blueprint-tram__body" />
-          <rect x="-40" y="-14" width="80" height="28" rx="4" className="blueprint-tram__inner" />
-          <line x1="-44" y1="-2" x2="44" y2="-2" className="blueprint-tram__trim" />
-          <line x1="-44" y1="8" x2="44" y2="8" className="blueprint-tram__trim" />
-          {[-30, -12, 6, 24].map((x) => (
-            <rect key={x} x={x} y="-10" width="14" height="9" rx="1.5" className="blueprint-tram__window" />
-          ))}
-          <path d="M -20 -18 L -30 -30 L -2 -30" className="blueprint-tram__pantograph" />
-          <line x1="-30" y1="-30" x2="12" y2="-30" className="blueprint-tram__pantograph" />
-          <circle cx="-24" cy="20" r="5" className="blueprint-tram__wheel" />
-          <circle cx="24" cy="20" r="5" className="blueprint-tram__wheel" />
-          <circle cx="44" cy="0" r="4" className="blueprint-tram__lamp" filter="url(#brassGlow)" />
-          <path d="M 48 -3 L 74 -12 L 74 12 L 48 3 Z" className="blueprint-tram__beam" />
-          <path d="M 0 -5 L 5 0 L 0 5 L -5 0 Z" className="blueprint-tram__emblem" />
+            <circle cx={JUNCTION_X} cy={RAIL_Y} r="3.5" fill={INK} />
+          </g>
+
+          {/* Targets */}
+          {renderTarget(dilemma.straightTrack, false)}
+          {renderTarget(dilemma.divertedTrack, true)}
+
+          {/* Mechanical lever */}
+          <g
+            transform="translate(112, 342)"
+            className="blueprint-lever"
+            onClick={!isAnimating ? onLeverToggle : undefined}
+            onKeyDown={(e) => {
+              if (!isAnimating && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onLeverToggle();
+              }
+            }}
+            data-hover-sound
+            role="button"
+            tabIndex={0}
+            aria-label={leverPulled ? 'Makas kolunu düz hatta al' : 'Makas kolunu çevir'}
+            aria-pressed={leverPulled}
+          >
+            <rect x="-42" y="2" width="84" height="34" rx="5" className="blueprint-lever__plate" />
+            <rect x="-32" y="-4" width="64" height="20" rx="4" fill={INK} />
+            <rect x="-25" y="0.5" width="50" height="3.5" rx="1.75" fill="rgba(242,233,216,.45)" />
+            <g className="blueprint-lever__handle" style={{ transform: `rotate(${leverPulled ? 26 : -26}deg)` }}>
+              <line x1="0" y1="6" x2="0" y2="-52" stroke={INK} strokeWidth="6" strokeLinecap="round" />
+              <circle cx="0" cy="-59" r="14" fill={RED} stroke={INK} strokeWidth="3.5" />
+              <circle cx="-4" cy="-63" r="3.5" fill={PAPER} opacity="0.7" />
+            </g>
+            <circle cx="0" cy="6" r="7" fill={PAPER} stroke={INK} strokeWidth="3" />
+            <text
+              x="58"
+              y="10"
+              fill="#4a4238"
+              style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 10.5, letterSpacing: '0.12em', fontWeight: 600 }}
+            >
+              MAKAS KOLU
+            </text>
+            <text
+              x="58"
+              y="26"
+              fill="#6f6555"
+              style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 9.5, letterSpacing: '0.1em' }}
+            >
+              {isAnimating ? 'HAREKET HALİNDE' : leverPulled ? 'MAKAS HATTI AÇIK' : 'DÜZ HAT AÇIK'}
+            </text>
+          </g>
+
+          <text
+            x={VIEW_W - 22}
+            y={VIEW_H - 14}
+            textAnchor="end"
+            fill="#6f6555"
+            opacity="0.85"
+            style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 9.5, letterSpacing: '0.14em' }}
+          >
+            ÖLÇEK 1:1 · REV. {String(dilemma.id).padStart(2, '0')}
+          </text>
+
+          {/* Tram */}
+          <g transform={`translate(${tramPos.x}, ${tramPos.y}) rotate(${tramPos.angle})`} className="blueprint-tram">
+            {isAnimating && (
+              <g className="blueprint-tram-trail">
+                <line x1="-96" y1="-14" x2="-76" y2="-14" />
+                <line x1="-114" y1="0" x2="-76" y2="0" />
+                <line x1="-96" y1="14" x2="-76" y2="14" />
+              </g>
+            )}
+
+            {/* Pantograph */}
+            <path
+              d="M -24 -30 L -44 -62 L 14 -62"
+              fill="none"
+              stroke={INK}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <line x1="-44" y1="-62" x2="30" y2="-62" stroke={INK} strokeWidth="3" strokeLinecap="round" />
+
+            {/* Roof */}
+            <rect x="-62" y="-37" width="124" height="11" rx="4" fill={INK} />
+
+            {/* Body */}
+            <rect x="-70" y="-29" width="140" height="58" rx="6" fill={RED} stroke={INK} strokeWidth="4" />
+
+            {/* Cream band */}
+            <rect x="-70" y="6" width="140" height="13" fill={PAPER} stroke={INK} strokeWidth="2" />
+
+            {/* Windows */}
+            <rect x="8" y="-23" width="54" height="25" rx="3" fill="#f6eeda" stroke={INK} strokeWidth="2.6" />
+            <rect x="-64" y="-23" width="30" height="25" rx="3" fill="#f6eeda" stroke={INK} strokeWidth="2.6" />
+            <rect x="-28" y="-23" width="30" height="25" rx="3" fill="#f6eeda" stroke={INK} strokeWidth="2.6" />
+
+            {/* Headlight + beam */}
+            <path d="M 74 -6 L 112 -20 L 112 12 L 74 6 Z" fill="#ffe9b8" opacity="0.26" />
+            <circle cx="66" cy="-2" r="6" fill="#ffe9b8" stroke={INK} strokeWidth="2.2" />
+
+            {/* Route badge */}
+            <rect x="-62" y="21" width="38" height="14" rx="2" fill={INK} />
+            <text
+              x="-43"
+              y="32"
+              textAnchor="middle"
+              fill={PAPER}
+              style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 9, fontWeight: 600 }}
+            >
+              27
+            </text>
+
+            {/* Wheels */}
+            <circle cx="-38" cy="33" r="9" fill={INK} />
+            <circle cx="38" cy="33" r="9" fill={INK} />
+            <circle cx="-38" cy="33" r="3.4" fill={PAPER} />
+            <circle cx="38" cy="33" r="3.4" fill={PAPER} />
+          </g>
         </g>
       </svg>
     </div>
