@@ -1,13 +1,16 @@
 # Render Blueprint — deploy this repo as a static site.
 # Docs: https://render.com/docs/blueprint-spec
 services:
-  - type: static
+  # Render has no `type: static`; static sites are web services with the
+  # `static` runtime and a publish directory instead of a start command.
+  - type: web
+    runtime: static
     name: tramvay-ikilemleri
-    repo: https://github.com/Sisyphus93/tramvay-ikilemleri
-    branch: arena/adcbbb68-tramvay-ikilemleri
+    # `repo` and `branch` are intentionally omitted: Render uses the repo and
+    # branch selected for this Blueprint, so it works on main or any branch.
     buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    # SPA-friendly: Render serves index.html for unknown paths automatically.
+    staticPublishPath: ./dist
+    # SPA fallback: serve index.html for unknown client-side paths.
     routes:
       - type: rewrite
         source: /*
