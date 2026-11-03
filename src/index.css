@@ -1502,3 +1502,160 @@ main.screen-main {
 /* ==========================================================================
    Utilities kept for component compatibility
    ========================================================================== */
+
+/* ==========================================================================
+   Readability and responsive composition
+   Keep the Risograph Transit palette, existing faces and original artwork.
+   ========================================================================== */
+
+/* A quieter paper ground lets the drawing and decisions lead. */
+.spotlight-layer, .paper-grain-overlay, .app-shell::after { display: none; }
+
+main.screen-main { padding: 24px 20px 48px; }
+.stage { max-width: 60rem; }
+
+.micro-label, .poster__kicker-tag, .poster__fact dt,
+.poster__fact dd span, .poster__cta-note, .poster__foot,
+.q__step, .q__chapter, .board__head, .board__legend,
+.route__kicker, .choice__route,
+.verdict__eyebrow, .verdict__stamp, .verdict__col-label,
+.verdict__next-hint, .archetype__badge, .archetype__mark,
+.stat__label, .stat__unit, .ledger__name, .ledger__outcome,
+.site-footer__inner, .header-meters {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pill-button {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.btn, .btn--lg {
+  min-height: 48px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 12px 22px;
+}
+
+.btn, .btn:hover, .btn:active, .btn:disabled,
+.pill-button, .pill-button:hover, .pill-button:active,
+.choice, .choice:hover:not(:disabled), .choice:active:not(:disabled),
+.choice--alt:hover:not(:disabled), .choice--is-active,
+.poster__art, .board, .verdict, .archetype { box-shadow: none; }
+
+.btn:hover, .pill-button:hover, .btn:active, .pill-button:active { transform: none; }
+.btn--primary:hover { background: var(--red-deep); }
+button { touch-action: manipulation; }
+button:disabled { cursor: not-allowed; }
+.route:disabled { opacity: .6; }
+
+/* Introduction: keep the poster, but give its words and artwork more air. */
+.poster__kicker { margin-bottom: 24px; gap: 10px 16px; }
+.poster__kicker-tag { border: 0; padding: 0; background: transparent; color: var(--ink); }
+.poster__title { font-size: clamp(2.5rem, 7vw, 4.6rem); line-height: .98; margin-bottom: 24px; }
+.poster__title .accent::after { display: none; }
+.poster__lede { font-size: 16px; line-height: 1.6; max-width: 48ch; color: var(--ink); }
+.poster__facts { border: 0; gap: 24px; margin: 24px 0 0; }
+.poster__fact { border: 0; padding: 0; }
+.poster__fact dd { font-size: 28px; margin-top: 8px; }
+.poster__cta { margin-top: 28px; gap: 16px; }
+.poster__cta-note { line-height: 1.6; }
+.poster__art { border: 0; background: var(--paper-deep); }
+.poster__art-label { font-size: 11px; letter-spacing: 0; text-transform: none; }
+.poster__foot { border: 0; margin-top: 32px; padding-top: 0; line-height: 1.6; }
+
+/* Gameplay: readable context, a bounded scene, and immediately visible choices. */
+.q { padding-bottom: 16px; }
+.q__topline { margin-bottom: 14px; }
+.q__step { border: 0; background: var(--paper-deep); padding: 5px 10px; }
+.q__chapter { white-space: normal; }
+.q__title { max-width: 52ch; font-size: clamp(1.35rem, 2.35vw, 1.85rem); line-height: 1.3; margin-bottom: 0; }
+.q__setup { display: block; font-size: 17px; font-weight: 400; line-height: 1.6; margin-bottom: 10px; }
+.q__ask { background-image: none; }
+.q__note { margin: 14px 0 0; font-size: 14px; }
+.board { border: 0; margin-top: 0; }
+.board__head { padding: 10px 16px; border: 0; background: var(--paper-deep); }
+.board__stage svg { max-height: 330px; }
+.board__legend { border: 0; padding: 10px 16px; gap: 8px 16px; }
+.routes { border: 0; }
+.route { padding: 12px 16px; }
+.route__name { font-size: 15px; }
+.choices { margin-top: 20px; gap: 16px; }
+.choice { min-height: 104px; padding: 16px; }
+.choice--muted { opacity: 1; }
+.choice__route { margin-bottom: 6px; line-height: 1.4; }
+.choice__route::before { display: none; }
+.choice__title { font-size: 18px; }
+.choice__desc { font-size: 14px; }
+.choice--is-active { background: var(--card); }
+.choice:hover:not(:disabled) { background: var(--paper-deep); }
+
+/* Results and the final record use the same readable secondary scale. */
+.verdict__col-desc, .archetype__desc, .report__lede { font-size: 16px; line-height: 1.6; }
+.verdict__chat, .ledger__head { font-size: 14px; letter-spacing: 0; text-transform: none; }
+.archetype::after { display: none; }
+.stat { border: 0; padding: 20px; }
+.ledger__row:nth-child(even) { background: transparent; }
+.site-footer__inner { line-height: 1.6; }
+
+@media (min-width: 768px) {
+  main.screen-main { padding: 32px 32px 48px; }
+  .poster__grid { gap: 32px; }
+}
+
+@media (min-width: 900px) {
+  .poster__grid { grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; }
+}
+
+@media (max-width: 559px) {
+  .site-header__inner { padding: 0 16px; gap: 8px; height: 68px; }
+  .brand { gap: 8px; }
+  .brand__name { font-size: 13px; white-space: normal; line-height: 1.25; }
+  .brand__name em { display: block; }
+  .header-actions { gap: 8px; }
+  .pill-button { padding: 0 10px; }
+  main.screen-main { padding: 24px 16px 36px; }
+  .poster__kicker { gap: 8px 12px; margin-bottom: 20px; }
+  .poster__grid { gap: 28px; }
+  .poster__title { font-size: clamp(2.3rem, 10.4vw, 3.5rem); }
+  .poster__facts { gap: 16px; }
+  .poster__cta { align-items: flex-start; }
+  .poster__cta .btn { width: 100%; }
+  .poster__cta-note br { display: initial; }
+  .q__topline { gap: 8px 12px; margin-bottom: 12px; }
+  .q { padding-bottom: 20px; }
+  .q__title { font-size: 22px; line-height: 1.3; }
+  .q__setup { font-size: 16px; }
+  .board__head { padding: 10px 12px; }
+  .board__legend { padding: 10px 12px; font-size: 11px; }
+  .route { padding: 10px 12px; }
+  .route__kicker { font-size: 12px; }
+  .choices { margin-top: 16px; gap: 12px; }
+  .choice { min-height: 100px; padding: 14px; gap: 12px; }
+  .choice__route { font-size: 11px; }
+  .verdict__actions { align-items: stretch; }
+  .verdict__actions .btn { width: 100%; }
+  .report__actions { align-items: stretch; }
+  .report__actions .btn { width: 100%; }
+}
+
+/* Use an existing darker brand ink for small red text and the primary action. */
+.btn--primary { background: var(--red-deep); }
+.btn--primary:hover { background: var(--red); color: var(--ink); }
+
+@media (max-width: 559px) {
+  .routes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .route { display: grid; grid-template-columns: 4px minmax(0, 1fr); gap: 4px 8px; padding: 10px; }
+  .route__tick { grid-row: span 2; }
+  .route + .route { border-top: 0; border-left: 1px solid var(--paper-deep); }
+  .route__name { overflow-wrap: anywhere; white-space: normal; }
+  .route__count { grid-column: 2; font-size: 14px; }
+}

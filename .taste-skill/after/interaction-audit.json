@@ -1,0 +1,159 @@
+[
+  {
+    "label": "desktop",
+    "metrics": {
+      "overflow": false,
+      "buttons": [
+        {
+          "text": "Ses",
+          "width": 68,
+          "height": 44
+        },
+        {
+          "text": "Başa dön",
+          "width": 44,
+          "height": 44
+        },
+        {
+          "text": "Düz hat\n5 yabancı\n×5canlı",
+          "width": 480,
+          "height": 66
+        },
+        {
+          "text": "Makas hattı\n1 yabancı\n×1hedef",
+          "width": 480,
+          "height": 66
+        },
+        {
+          "text": "1\nDüz hat · müdahale yok\nHiçbir şey yapma\n5 yabancı hedefte kalır.",
+          "width": 472,
+          "height": 107
+        },
+        {
+          "text": "2\nMakas hattı · kolu çek\nKolu çek\n1 yabancı hedef olur.",
+          "width": 472,
+          "height": 107
+        }
+      ],
+      "choices": [
+        {
+          "top": 776,
+          "bottom": 883
+        },
+        {
+          "top": 776,
+          "bottom": 883
+        }
+      ],
+      "links": [],
+      "forms": 0
+    },
+    "errors": []
+  },
+  {
+    "resultVisible": true,
+    "resultText": "Kararın\nHiçbir şey yapma\nDoğal akış\nKurtarılan\n1 yabancı\n\nYan raydaki 1 yabancı\n\nFeda edilen\n5 yabancı\n\nAna raydaki 5 yabancı\n\n“Beş kişi öldü; müdahale etmedin. Modlar çoktan anketi yapıştırdı.”\nSohbet: Kontrol grubu: kitlen ne kadar faydacı, ne kadar kararsız?\nEnter ile ilerle\nSonraki ikilem"
+  },
+  {
+    "label": "tablet",
+    "metrics": {
+      "overflow": false,
+      "buttons": [
+        {
+          "text": "Ses",
+          "width": 68,
+          "height": 44
+        },
+        {
+          "text": "Başa dön",
+          "width": 44,
+          "height": 44
+        },
+        {
+          "text": "Düz hat\n5 yabancı\n×5canlı",
+          "width": 352,
+          "height": 66
+        },
+        {
+          "text": "Makas hattı\n1 yabancı\n×1hedef",
+          "width": 352,
+          "height": 66
+        },
+        {
+          "text": "1\nDüz hat · müdahale yok\nHiçbir şey yapma\n5 yabancı hedefte kalır.",
+          "width": 344,
+          "height": 107
+        },
+        {
+          "text": "2\nMakas hattı · kolu çek\nKolu çek\n1 yabancı hedef olur.",
+          "width": 344,
+          "height": 107
+        }
+      ],
+      "choices": [
+        {
+          "top": 744,
+          "bottom": 852
+        },
+        {
+          "top": 744,
+          "bottom": 852
+        }
+      ],
+      "links": [],
+      "forms": 0
+    },
+    "errors": []
+  },
+  {
+    "label": "mobile",
+    "metrics": {
+      "overflow": false,
+      "buttons": [
+        {
+          "text": "Sesi kapat",
+          "width": 44,
+          "height": 44
+        },
+        {
+          "text": "Başa dön",
+          "width": 44,
+          "height": 44
+        },
+        {
+          "text": "Düz hat\n5 yabancı\n×5canlı",
+          "width": 179,
+          "height": 88
+        },
+        {
+          "text": "Makas hattı\n1 yabancı\n×1hedef",
+          "width": 179,
+          "height": 88
+        },
+        {
+          "text": "1\nDüz hat · müdahale yok\nHiçbir şey yapma\n5 yabancı hedefte kalır.",
+          "width": 358,
+          "height": 102
+        },
+        {
+          "text": "2\nMakas hattı · kolu çek\nKolu çek\n1 yabancı hedef olur.",
+          "width": 358,
+          "height": 102
+        }
+      ],
+      "choices": [
+        {
+          "top": 653,
+          "bottom": 755
+        },
+        {
+          "top": 767,
+          "bottom": 869
+        }
+      ],
+      "links": [],
+      "forms": 0
+    },
+    "errors": []
+  }
+]
