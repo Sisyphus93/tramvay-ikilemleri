@@ -38,12 +38,12 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const totalLeverPulls = history.filter((h) => h.leverPulled).length;
 
   const getArchetype = () => {
-    // Ratios keep these thresholds meaningful after the duplicate bonus levels were pruned.
+    // Ratios keep thresholds meaningful regardless of lineup length or order.
     const leverPullRatio = totalLeverPulls / DILEMMAS.length;
-    const savedPet = history.find((h) => h.dilemmaId === 3 && !h.leverPulled);
-    const killedPet = history.find((h) => h.dilemmaId === 3 && h.leverPulled);
-    const killedKolsuz = history.find((h) => (h.dilemmaId === 26 && h.isBonus) && h.leverPulled);
-    const tookBribe = history.find((h) => h.dilemmaId === 9 && h.leverPulled);
+    const savedPet = history.find((h) => h.dilemmaId === 11 && !h.leverPulled);
+    const killedPet = history.find((h) => h.dilemmaId === 11 && h.leverPulled);
+    const killedKolsuz = history.find((h) => h.dilemmaId === 23 && h.leverPulled);
+    const tookBribe = history.find((h) => h.dilemmaId === 16 && h.leverPulled);
 
     if (tookBribe && leverPullRatio >= 0.45) {
       return {
