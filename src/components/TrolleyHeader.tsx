@@ -18,6 +18,8 @@ interface TrolleyHeaderProps {
   isPlaying: boolean;
 }
 
+const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
   currentStep,
   totalSteps,
@@ -42,8 +44,8 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
           className="brand-mark focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E6C77A] rounded-lg"
           aria-label="Başa dön"
         >
-          <span className="brand-mark__seal" aria-hidden="true">27</span>
-          <span className="transition-colors duration-300 hover:text-[#E6C77A]">
+          <span className="brand-mark__seal numeral" aria-hidden="true">27</span>
+          <span className="transition-colors duration-500 hover:text-[#E6C77A]">
             Absürt Tramvay İkilemleri
           </span>
         </button>
@@ -51,11 +53,11 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
         {isPlaying && (
           <div className="header-meta font-label">
             <span>
-              İKİLEM <strong className="tabular-nums">{String(currentStep + 1).padStart(2, '0')}</strong> / {totalSteps}
+              İKİLEM <strong className="numeral tabular-nums">{String(currentStep + 1).padStart(2, '0')}</strong> / <span className="numeral">{totalSteps}</span>
             </span>
             <span className="header-meta__divider" aria-hidden="true" />
             <span>
-              ZAYİAT <strong className="tabular-nums text-[#E28B76]">{totalDeaths}</strong>
+              ZAYİAT <strong className="numeral tabular-nums text-[#E28B76]">{totalDeaths}</strong>
             </span>
           </div>
         )}
@@ -100,7 +102,7 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
             className="progress-fill"
             initial={false}
             animate={{ width: `${progress}%` }}
-            transition={reduceMotion ? { duration: 0 } : { duration: 0.55, ease: 'easeOut' }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.85, ease: EASE }}
           />
         </div>
       )}

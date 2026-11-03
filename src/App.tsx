@@ -28,6 +28,8 @@ import {
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 
+const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('TITLE');
   const [currentStep, setCurrentStep] = useState<number>(0);
@@ -40,7 +42,6 @@ export default function App() {
   const lastHoverRef = useRef(0);
   const reduceMotion = useReducedMotion();
 
-  // The hybrid shell owns the dark frame; no legacy Tailwind dark mode is used.
   useEffect(() => {
     document.documentElement.classList.remove('dark');
     try {
@@ -50,7 +51,6 @@ export default function App() {
     }
   }, []);
 
-  // Browsers only allow audio after a gesture. Start the bed on the first one.
   useEffect(() => {
     const startOnFirstGesture = () => {
       if (getSoundEnabled()) startMusicBed();
@@ -65,7 +65,6 @@ export default function App() {
     };
   }, []);
 
-  // A single delegated, throttled hover blip for every [data-hover-sound] element.
   useEffect(() => {
     const onOver = (e: MouseEvent) => {
       const target = e.target as Element | null;
@@ -207,28 +206,28 @@ export default function App() {
   const screenMotion = reduceMotion
     ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
     : {
-        initial: { opacity: 0, y: 18, scale: 0.985 },
-        animate: { opacity: 1, y: 0, scale: 1 },
-        exit: { opacity: 0, y: -14, scale: 0.99 },
-        transition: { type: 'spring' as const, stiffness: 135, damping: 20, mass: 0.9 },
+        initial: { opacity: 0, y: 22, filter: 'blur(6px)' },
+        animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
+        exit: { opacity: 0, y: -16, filter: 'blur(4px)' },
+        transition: { duration: 0.72, ease: EASE },
       };
 
   const stepMotion = reduceMotion
     ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
     : {
-        initial: { opacity: 0, y: 12 },
+        initial: { opacity: 0, y: 14 },
         animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: -10 },
-        transition: { duration: 0.36, ease: 'easeOut' as const },
+        exit: { opacity: 0, y: -12 },
+        transition: { duration: 0.48, ease: EASE },
       };
 
   const controlMotion = reduceMotion
     ? { initial: {}, animate: {}, exit: {}, transition: { duration: 0 } }
     : {
-        initial: { opacity: 0, y: 10 },
+        initial: { opacity: 0, y: 12 },
         animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: -8 },
-        transition: { duration: 0.3, ease: 'easeOut' as const },
+        exit: { opacity: 0, y: -10 },
+        transition: { duration: 0.42, ease: EASE },
       };
 
   return (
@@ -248,6 +247,19 @@ export default function App() {
 
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-12">
         <div className="stage w-full">
+          <motion.div
+            key={`sheen-${gameState}`}
+            className="screen-sheen"
+            aria-hidden="true"
+            initial={reduceMotion ? { opacity: 0 } : { x: '-135%', opacity: 0 }}
+            animate={
+              reduceMotion
+                ? { opacity: 0 }
+                : { x: '135%', opacity: [0, 0.75, 0] }
+            }
+            transition={reduceMotion ? { duration: 0 } : { duration: 1.25, ease: EASE }}
+          />
+
           <AnimatePresence mode="wait" initial={false}>
             {gameState === 'TITLE' && (
               <motion.div key="title" {...screenMotion} className="w-full">
@@ -259,11 +271,17 @@ export default function App() {
               <motion.div key="playing" {...screenMotion} className="w-full">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div key={currentStep} {...stepMotion} className="w-full">
-                    <section className="question-card paper-card" aria-live="polite">
+                    <section className="question-card paper-card blueprint-question" aria-live="polite">
                       <div className="micro-label question-card__kicker">
-                        İKİLEM {String(currentStep + 1).padStart(2, '0')} / {DILEMMAS.length}
+                        İKİLEM <span className="numeral">{String(currentStep + 1).padStart(2, '0')}</span> / <span className="numeral">{DILEMMAS.length}</span>
                       </div>
-                      <div className="foil-rule mx-auto max-w-xs" />
+                      <motion.div
+                        key={`rule-${currentStep}`}
+                        initial={reduceMotion ? {} : { scaleX: 0 }}
+                        animate={{ scaleX: 1 }}
+                        transition={reduceMotion ? { duration: 0 } : { duration: 1, ease: EASE }}
+                        className="foil-rule mx-auto max-w-xs origin-center"
+                      />
                       <h3 className="micro-label mt-4 text-[#8A6222]">
                         {currentDilemma.title}
                       </h3>
@@ -277,9 +295,9 @@ export default function App() {
 
                     <div className="canvas-frame">
                       <span className="canvas-frame__label">
-                        SAHNE {String(currentStep + 1).padStart(2, '0')} · MAKAS KOLU
+                        PLAN <span className="numeral">{String(currentStep + 1).padStart(2, '0')}</span> / <span className="numeral">{DILEMMAS.length}</span> · MAKAS ŞEMASI
                       </span>
-                      <span className="canvas-frame__hint">[BOŞLUK] İLE KOLU ÇEK</span>
+                      <span className="canvas-frame__hint">[BOŞLUK] MAKASI ÇEVİR</span>
                       <TrolleyCanvas
                         dilemma={currentDilemma}
                         decision={decision}
@@ -332,7 +350,7 @@ export default function App() {
             Absürt Tramvay İkilemleri · Türkçe
           </span>
           <span className="micro-label">
-            [1] DÜZ · [2] MAKAS · [BOŞLUK] KOLU ÇEK · [M] SES
+            <span className="numeral">[1]</span> DÜZ · <span className="numeral">[2]</span> MAKAS · [BOŞLUK] KOLU ÇEK · [M] SES
           </span>
         </div>
       </footer>

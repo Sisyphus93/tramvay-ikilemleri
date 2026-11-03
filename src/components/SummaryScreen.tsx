@@ -24,6 +24,8 @@ interface SummaryScreenProps {
   onRestart: () => void;
 }
 
+const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   history,
   onRestart,
@@ -110,13 +112,13 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const container = reduceMotion
     ? { hidden: {}, show: {} }
-    : { hidden: {}, show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } } };
+    : { hidden: {}, show: { transition: { staggerChildren: 0.1, delayChildren: 0.06 } } };
 
   const item = reduceMotion
     ? { hidden: {}, show: {} }
     : {
-        hidden: { opacity: 0, y: 16 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } },
+        hidden: { opacity: 0, y: 18 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: EASE } },
       };
 
   return (
@@ -124,7 +126,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
       variants={container}
       initial="hidden"
       animate="show"
-      className="w-full max-w-3xl mx-auto"
+      className="blueprint-summary w-full max-w-3xl mx-auto"
     >
       <motion.div variants={item} className="summary-header">
         <span className="micro-label text-[#8A6222] tracking-widest">
@@ -132,11 +134,17 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         </span>
         <h1>Felsefeyi Çözdün!</h1>
         <p className="text-[#655B4E] text-sm max-w-lg mx-auto mt-3 leading-relaxed">
-          {DILEMMAS.length} absürt tramvay ikilemini geride bıraktın. İşte verdiğin kararların toplumsal ve ahlaki bilançosu:
+          <span className="numeral">{DILEMMAS.length}</span> absürt tramvay ikilemini geride bıraktın. İşte verdiğin kararların toplumsal ve ahlaki bilançosu:
         </p>
       </motion.div>
 
-      <motion.div variants={item} className="stamp my-7">
+      <motion.div
+        variants={item}
+        initial={reduceMotion ? {} : { opacity: 0, scale: 0.95, rotate: -1.2 }}
+        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.9, ease: EASE }}
+        className="stamp blueprint-stamp my-7"
+      >
         <div className="badge-pill micro-label">
           <Award className="w-3.5 h-3.5" />
           <span>{archetype.badge}</span>
@@ -150,41 +158,41 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
       </motion.div>
 
       <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-7">
-        <div className="stat-card">
+        <div className="stat-card blueprint-stat">
           <div className="flex items-center justify-center gap-1.5 micro-label text-[#7A6F60]">
             <Skull className="w-4 h-4 text-[#A23A26]" />
             <span>TOPLAM ZAYİAT</span>
           </div>
-          <div className="font-display text-3xl font-semibold text-[#2A2520] tabular-nums mt-2">
+          <div className="numeral text-3xl font-semibold text-[#2A2520] tabular-nums mt-2">
             {totalDeaths} <span className="text-xs font-sans font-normal text-[#6B6154]">can</span>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card blueprint-stat">
           <div className="micro-label text-[#7A6F60]">KOLU ÇEKTİ</div>
-          <div className="font-display text-3xl font-semibold text-[#A23A26] tabular-nums mt-2">
+          <div className="numeral text-3xl font-semibold text-[#A23A26] tabular-nums mt-2">
             {totalLeverPulls} <span className="text-xs font-sans font-normal text-[#6B6154]">kez</span>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card blueprint-stat">
           <div className="micro-label text-[#7A6F60]">HİÇBİR ŞEY YAPMADI</div>
-          <div className="font-display text-3xl font-semibold text-[#2F8478] tabular-nums mt-2">
+          <div className="numeral text-3xl font-semibold text-[#2F8478] tabular-nums mt-2">
             {DILEMMAS.length - totalLeverPulls} <span className="text-xs font-sans font-normal text-[#6B6154]">kez</span>
           </div>
         </div>
       </motion.div>
 
-      <motion.div variants={item} className="my-7 paper-card overflow-hidden">
+      <motion.div variants={item} className="my-7 paper-card blueprint-details overflow-hidden">
         <button
           onClick={() => {
             playSoftTick(0);
             setShowDetails(!showDetails);
           }}
           data-hover-sound
-          className="w-full py-4 px-5 flex items-center justify-between text-left font-headline text-sm font-bold text-[#2A2520] hover:bg-[#E7DCC5]/50 transition-colors"
+          className="w-full py-4 px-5 flex items-center justify-between text-left font-headline text-sm font-bold text-[#2A2520] hover:bg-[#E7DCC5]/50 transition-colors duration-500"
         >
-          <span>{DILEMMAS.length} İkilemdeki Tercihlerinin Tam Dökümü</span>
+          <span><span className="numeral">{DILEMMAS.length}</span> İkilemdeki Tercihlerinin Tam Dökümü</span>
           {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
 
@@ -198,7 +206,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
               const lostTarget = isLever ? dilemma.divertedTrack : dilemma.straightTrack;
 
               return (
-                <div key={idx} className="detail-row flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div key={idx} className="detail-row blueprint-detail flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="space-y-1">
                     <div className="font-headline text-sm font-bold text-[#2A2520]">{dilemma.title}</div>
                     <p className="text-[#6B6154]">
