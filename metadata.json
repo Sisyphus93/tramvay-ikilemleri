@@ -1,0 +1,6 @@
+{
+  "name": "Absürt Tramvay İkilemleri",
+  "description": "Neal.fun'ın popüler Absurd Trolley Problems oyununun Türk internet, yayıncı ve oyun kültürüne uyarlanmış interaktif felsefi seçim oyunu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

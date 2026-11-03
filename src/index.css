@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #F4EDDF;
+  --color-paper-deep: #E7DCC5;
+  --color-ink: #2A2520;
+  --color-soft-ink: #6B6154;
+  --color-amber: #E3A33B;
+  --color-vermilion: #D5472F;
+  --color-teal: #2F8478;
+  --color-dusty-blue: #7FA6BD;
+
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-hand: 'Caveat', cursive;
+}
+
+:root {
+  --bg-paper: #F4EDDF;
+  --bg-paper-deep: #E7DCC5;
+  --text-ink: #2A2520;
+  --text-soft-ink: #6B6154;
+}
+
+body {
+  background-color: var(--bg-paper);
+  color: var(--text-ink);
+  font-family: var(--font-sans);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+}
+
+/* Warm Paper Headings */
+h1, h2, h3, .font-headline {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+}
+
+.font-handwriting {
+  font-family: var(--font-hand);
+}
+
+.font-label {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+/* Static Paper Grain Texture (4-6% opacity, never animated) */
+.paper-grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Flat paper shadows per Warm Paper design system */
+.flat-shadow {
+  box-shadow: 3px 3px 0px #E7DCC5;
+}
+
+.flat-shadow-lg {
+  box-shadow: 4px 5px 0px #E7DCC5;
+}
+
+/* Soft Amber Spark Halo */
+.spark-halo {
+  filter: drop-shadow(0 0 16px rgba(227, 163, 59, 0.45));
+}
