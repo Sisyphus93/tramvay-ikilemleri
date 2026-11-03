@@ -47,11 +47,11 @@ export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
               {dilemma.straightActionLabel}
             </span>
             <span className="text-[11px] font-label text-[#6B6154] shrink-0">
-              [DÜZ YOL]
+              {dilemma.conceptualChoice ? '[1. SEÇİM]' : '[DÜZ YOL]'}
             </span>
           </div>
           <p className="text-xs text-[#6B6154] mt-1 line-clamp-2">
-            Tramvay ana yoldan sapmaz: {dilemma.straightTrack.label} hedefte kalır.
+            {dilemma.conceptualChoice ? `Sonuç: ${dilemma.straightTrack.label}` : `Tramvay ana yoldan sapmaz: ${dilemma.straightTrack.label} hedefte kalır.`}
           </p>
         </div>
       </button>
@@ -81,11 +81,11 @@ export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
               {dilemma.divertedActionLabel}
             </span>
             <span className="text-[11px] font-label text-[#D5472F] font-bold shrink-0">
-              [MAKAS ÇEK]
+              {dilemma.conceptualChoice ? '[2. SEÇİM]' : '[MAKAS ÇEK]'}
             </span>
           </div>
           <p className="text-xs text-[#6B6154] mt-1 line-clamp-2">
-            Kolu çekip yönü değiştirir: {dilemma.divertedTrack.label} hedef olur.
+            {dilemma.conceptualChoice ? `Sonuç: ${dilemma.divertedTrack.label}` : `Kolu çekip yönü değiştirir: ${dilemma.divertedTrack.label} hedef olur.`}
           </p>
         </div>
       </button>

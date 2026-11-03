@@ -48,7 +48,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
           </span>
         </div>
         <span className="text-xs font-label text-[#6B6154]">
-          {leverPulled ? 'MAKAS DEĞİŞTİRİLDİ' : 'DOĞAL AKIŞA BIRAKILDI'}
+          {dilemma.conceptualChoice ? 'SEÇİM YAPILDI' : leverPulled ? 'MAKAS DEĞİŞTİRİLDİ' : 'DOĞAL AKIŞA BIRAKILDI'}
         </span>
       </div>
 
@@ -58,7 +58,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
         <div className="p-3.5 rounded-xl bg-[#E7DCC5]/70 border border-[#2A2520] space-y-1">
           <div className="flex items-center gap-1.5 text-xs font-label text-[#2F8478] font-bold">
             <ShieldCheck className="w-4 h-4" />
-            <span>KURTARILAN:</span>
+            <span>{dilemma.conceptualChoice ? 'KORUNAN:' : 'KURTARILAN:'}</span>
           </div>
           <div className="font-bold text-sm text-[#2A2520] font-headline">
             {savedTarget.label}
@@ -72,7 +72,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
         <div className="p-3.5 rounded-xl bg-[#E7DCC5]/70 border border-[#2A2520] space-y-1">
           <div className="flex items-center gap-1.5 text-xs font-label text-[#D5472F] font-bold">
             <Skull className="w-4 h-4" />
-            <span>FEDA EDİLEN / ZAYİAT:</span>
+            <span>{dilemma.conceptualChoice ? 'SONUÇ:' : 'FEDA EDİLEN / ZAYİAT:'}</span>
           </div>
           <div className="font-bold text-sm text-[#D5472F] font-headline">
             {lostTarget.label}

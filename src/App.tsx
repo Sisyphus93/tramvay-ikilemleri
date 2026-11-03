@@ -199,6 +199,10 @@ export default function App() {
               </h2>
             </div>
 
+            {currentDilemma.conceptualChoice && (
+              <p className="text-center text-xs text-[#6B6154]">Sahne seçimleri sembolik olarak gösterir; sonuçlar yukarıdaki senaryoya göredir.</p>
+            )}
+
             {/* Warm Paper Hand-inked SVG Scene */}
             <TrolleyCanvas
               dilemma={currentDilemma}
@@ -238,7 +242,7 @@ export default function App() {
       <footer className="w-full py-4 border-t-2 border-[#2A2520] bg-[#F4EDDF] text-center text-xs text-[#6B6154] relative z-10">
         <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span className="font-headline">
-            Neal.fun "Absurd Trolley Problems" Türkçe Uyarlaması
+            Absürt Tramvay İkilemleri · Türkçe
           </span>
           <span className="font-label text-[11px] text-[#6B6154]">
             [1] DÜZ · [2] MAKAS · [BOŞLUK] KOLU ÇEK

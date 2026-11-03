@@ -63,6 +63,7 @@ export interface TrackTarget {
 export interface Dilemma {
   id: number;
   isBonus?: boolean;
+  conceptualChoice?: boolean;
   campaignLabel?: string;
   title: string;
   question: string;
