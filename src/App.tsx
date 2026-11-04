@@ -28,7 +28,7 @@ import {
   stopAllCues,
   armAmbience,
 } from './utils/audio.ts';
-import { getTramAnimationSeconds } from './components/TrolleyCanvas.tsx';
+import { getTramAnimationSeconds, TramRun } from './components/TrolleyCanvas.tsx';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 
@@ -106,6 +106,13 @@ export default function App() {
    * and skip a dilemma.
    */
   const advancingRef = useRef(false);
+  /**
+   * The live tram animation run. The object is handed to the canvas by
+   * reference and only ever *replaced* when a new run starts, so mutating
+   * `cancelled` reaches a subtree that is frozen mid-exit with the old props.
+   * Starts cancelled: nothing may fire before the first decision.
+   */
+  const runRef = useRef<TramRun>({ id: 0, cancelled: true });
 
   const clearRevealTimer = useCallback(() => {
     if (revealTimerRef.current !== null) {
@@ -157,6 +164,13 @@ export default function App() {
     // the ambience bed only runs during the game
     armAmbience();
     playPress();
+    // A new game always opens on the choice board. handleRestart already
+    // clears these, but nothing else stands between TITLE and PLAYING, so
+    // reset them here instead of trusting whichever exit path got us back.
+    runRef.current.cancelled = true;
+    setDecision(null);
+    setIsAnimating(false);
+    setShowResult(false);
     setGameState('PLAYING');
   }, []);
 
@@ -183,6 +197,9 @@ export default function App() {
       advancingRef.current = false;
       // a still-ringing impact or stamp from the previous round dies here
       fadeOutOutcome();
+      // a fresh run identity, so any animation left over from a previous round
+      // (or from a subtree still exiting) can no longer claim to be current
+      runRef.current = { id: runRef.current.id + 1, cancelled: false };
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
@@ -198,7 +215,11 @@ export default function App() {
    * the result screen appears on the stamp. Controls stay locked meanwhile
    * because `isAnimating` is still true.
    */
-  const handleAnimationEnd = useCallback(() => {
+  const handleAnimationEnd = useCallback((run: TramRun) => {
+    // The caller may be a subtree frozen mid-exit, still holding this closure
+    // from before a restart or an advance. Its `decision`, `currentDilemma` and
+    // `gameState` are all stale, so reject anything that is not the live run.
+    if (run !== runRef.current || run.cancelled) return;
     if (verdictGuardRef.current) return;
     verdictGuardRef.current = true;
 
@@ -239,6 +260,8 @@ export default function App() {
 
     clearRevealTimer();
     verdictGuardRef.current = false;
+    // the round being left behind must not report its impact any more
+    runRef.current.cancelled = true;
     // never let a long comic crash (1.2 s) bleed into the next dilemma
     fadeOutOutcome();
     if (currentStep < DILEMMAS.length - 1) {
@@ -259,6 +282,10 @@ export default function App() {
     clearRevealTimer();
     verdictGuardRef.current = false;
     advancingRef.current = false;
+    // Cancel the abandoned run. The exiting subtree is frozen with its old
+    // props and keeps animating, so without this it would fire the impact and
+    // reveal a verdict for a decision the player just walked away from.
+    runRef.current.cancelled = true;
     // sweep first, then play the page-turn: it used to be stopped an instant
     // after it started, so restart was silent
     fadeOutOutcome();
@@ -422,6 +449,7 @@ export default function App() {
                             dilemma={currentDilemma}
                             decision={decision}
                             isAnimating={isAnimating}
+                            run={runRef.current}
                             onAnimationEnd={handleAnimationEnd}
                             leverPulled={leverPulled}
                             onLeverToggle={handleLeverToggle}
