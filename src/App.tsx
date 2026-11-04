@@ -315,23 +315,53 @@ export default function App() {
     [isAnimating, showResult, leverPulled]
   );
 
+  /**
+   * One advance, shared by the Next button and the keyboard path, so advancing
+   * with a key plays the same paper cue as advancing with a click.
+   */
+  const advance = useCallback(() => {
+    playPaper();
+    handleNextDilemma();
+  }, [handleNextDilemma]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Browser and OS combos are never game keys.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       // focus inside the audio-settings popover: arrows/space adjust the
       // sliders and toggles, they must not play the game. M stays global.
       const origin = e.target as Element | null;
       const isMuteKey = e.key === 'm' || e.key === 'M';
       if (!isMuteKey && origin?.closest?.('.audio-settings')) return;
 
-      if (e.key === 'm' || e.key === 'M') {
+      if (isMuteKey) {
         toggleSound();
-      } else if (gameState === 'TITLE' && (e.key === 'Enter' || e.key === ' ')) {
+        return;
+      }
+
+      // A focused control owns Enter and Space: let it activate natively rather
+      // than hijacking the keypress for a game action. Without this, Space on
+      // the mute pill, a choice button or Restart also toggled the lever, and
+      // Enter on the Next button advanced without its paper cue. The number,
+      // arrow and L keys stay global — no control claims those.
+      const isActivationKey = e.key === 'Enter' || e.key === ' ';
+      if (
+        isActivationKey &&
+        origin?.closest?.(
+          'button, a, input, select, textarea, [contenteditable], [role="slider"], [role="button"]'
+        )
+      ) {
+        return;
+      }
+
+      if (gameState === 'TITLE' && isActivationKey) {
         e.preventDefault();
         handleStart();
       } else if (gameState === 'PLAYING') {
-        if (showResult && (e.key === 'Enter' || e.key === ' ')) {
+        if (showResult && isActivationKey) {
           e.preventDefault();
-          handleNextDilemma();
+          advance();
         } else if (!isAnimating && !showResult) {
           if (e.key === '1' || e.key === 'ArrowLeft') {
             handleMakeDecision('straight');
@@ -351,7 +381,7 @@ export default function App() {
     gameState,
     showResult,
     isAnimating,
-    handleNextDilemma,
+    advance,
     handleMakeDecision,
     handleLeverToggle,
     toggleSound,
@@ -504,7 +534,7 @@ export default function App() {
                           <ResultOverlay
                             dilemma={currentDilemma}
                             decision={decision || 'straight'}
-                            onNext={handleNextDilemma}
+                            onNext={advance}
                             isLast={currentStep === DILEMMAS.length - 1}
                           />
                         </motion.div>
