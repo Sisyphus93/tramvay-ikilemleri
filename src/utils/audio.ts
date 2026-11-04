@@ -3,738 +3,916 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Premium hybrid sound engine.
-// Pure Web Audio API — no audio files.
-// Layers:
-// 1. A warm, slowly evolving chord bed with a gentle filter LFO.
-// 2. A shared master bus: soft compression + a short convolution reverb for space.
-// 3. Refined cues: hover, lever, decision whoosh, reveal chime, transitions,
-//    tram sweep, impact, pencil, paper, ticks, chord swell and summary payoff.
+/**
+ * Sample-based audio engine.
+ *
+ * Sampling only: every cue is a pre-rendered slice of `public/audio/sfx.ogg|m4a|wav`
+ * (see `public/audio/README.md`). No oscillators, no synth beeps, no generated
+ * tones. The single exception is the tram rumble, which loops a pre-rendered
+ * brown-noise bed and sweeps a filter over it at runtime.
+ *
+ * Graph:
+ *
+ *   sfx ───────────────► master ► limiter ► destination
+ *   ambience ► duck ───┘
+ *   rumble ────────────┘
+ *
+ * Everything is defensive: if a file is missing, returns HTML (SPA fallback) or
+ * fails to decode, the game plays silently and logs at most one warning per
+ * item. No AudioContext is created before a user gesture.
+ */
 
-let audioCtx: AudioContext | null = null;
+/* ------------------------------------------------------------------ *
+ * Timing constants — tune these by ear
+ * ------------------------------------------------------------------ */
+
+export const TIMING = {
+  /** dead air between the impact and the ink stamp when no mood sting wants it */
+  silenceBeat: 0.08,
+  /** impact → stamp, in seconds */
+  stampAfterImpact: 0.3,
+  /** impact → mood sting, in seconds */
+  stingAfterImpact: 0.7,
+  /** pulled lever: lever_clack → bell */
+  bellAfterLever: 0.28,
+  /** not pulled: air_brake → brake_squeal */
+  squealAfterBrake: 0.15,
+  /** ambience fade-in on unlock */
+  ambienceFadeIn: 3,
+  /** rumble clack interval schedule */
+  clackStartInterval: 0.55,
+  clackIntervalFactor: 0.86,
+  clackMinInterval: 0.16,
+  /** rumble lowpass sweep */
+  rumbleCutoffStart: 80,
+  rumbleCutoffEnd: 380,
+};
+
+/**
+ * ms from the end of the tram animation to the visible result (= the stamp):
+ * a short silence beat to clear the air, then the impact, then the stamp.
+ * 80 + 300 = 380 ms.
+ */
+const IMPACT_TO_STAMP_MS = Math.round((TIMING.silenceBeat + TIMING.stampAfterImpact) * 1000);
+
+/* ------------------------------------------------------------------ *
+ * Assets
+ * ------------------------------------------------------------------ */
+
+const SFX_MAP_URL = '/audio/sfx.json';
+const AMBIENCE_URLS = ['/audio/ambience.ogg', '/audio/ambience.m4a', '/audio/ambience.wav'];
+
+const SFX_FORMATS = [
+  { url: '/audio/sfx.ogg', type: 'audio/ogg; codecs=vorbis' },
+  { url: '/audio/sfx.m4a', type: 'audio/mp4; codecs=mp4a.40.2' },
+  { url: '/audio/sfx.wav', type: 'audio/wav' },
+];
+
+type SpriteMap = Record<string, [number, number]>;
+
+/** Fallback slice lengths (ms) if sfx.json cannot be loaded at all. */
+const FALLBACK_SLICES: SpriteMap = {
+  press: [0, 150],
+  hover_1: [250, 50],
+  hover_2: [400, 50],
+  hover_3: [550, 50],
+  switch_1: [700, 120],
+  switch_2: [920, 120],
+  paper_1: [1140, 433],
+  paper_2: [1673, 531],
+  paper_3: [2304, 546],
+  lever_clack_1: [2950, 500],
+  lever_clack_2: [3550, 500],
+  bell: [4150, 1200],
+  air_brake: [5450, 800],
+  brake_squeal: [6350, 600],
+  drone: [7050, 2000],
+  clack_1: [9150, 120],
+  clack_2: [9370, 120],
+  clack_3: [9590, 120],
+  impact_muffled_1: [9810, 600],
+  impact_muffled_2: [10510, 600],
+  crash_comic: [11210, 1200],
+  stamp_1: [12510, 400],
+  stamp_2: [13010, 400],
+  sting_relief: [13510, 1500],
+  sting_dread: [15110, 1500],
+  sting_absurd: [16710, 1500],
+};
+
+/** Sounds whose pitch must not be randomised (they carry harmony). */
+const TONAL = new Set(['bell', 'drone', 'sting_relief', 'sting_dread', 'sting_absurd']);
+
+/** Names that exist as `_1.._n` variants. */
+const VARIANT_GROUPS: Record<string, number> = {
+  hover: 3,
+  switch: 2,
+  paper: 3,
+  lever_clack: 2,
+  clack: 3,
+  impact_muffled: 2,
+  stamp: 2,
+};
+
+/* ------------------------------------------------------------------ *
+ * State
+ * ------------------------------------------------------------------ */
+
+type Ctx = AudioContext;
+
+interface Engine {
+  ctx: Ctx;
+  master: GainNode;
+  limiter: DynamicsCompressorNode;
+  sfxBus: GainNode;
+  ambienceBus: GainNode;
+  ambienceDuck: GainNode;
+  rumbleBus: GainNode;
+  sfxBuffer: AudioBuffer | null;
+  ambienceBuffer: AudioBuffer | null;
+  sprite: SpriteMap;
+  format: string | null;
+}
+
+let engine: Engine | null = null;
+let unlockPromise: Promise<void> | null = null;
+let preloadPromise: Promise<SfxPayload | null> | null = null;
+let preloadStarted = false;
+
+interface SfxPayload {
+  bytes: ArrayBuffer;
+  sprite: SpriteMap | null;
+}
+
 let soundEnabled = true;
+let volume = 0.7;
+const STORAGE_SOUND = 'tramvay_sound_enabled';
+const STORAGE_VOLUME = 'tramvay_volume';
 
-interface AudioBus {
-  input: GainNode;
-  reverb: ConvolverNode;
-  wet: GainNode;
-  compressor: DynamicsCompressorNode;
-}
-
-let bus: AudioBus | null = null;
-let busCtx: AudioContext | null = null;
-
-interface MusicNodes {
-  masterGain: GainNode | null;
-  filter: BiquadFilterNode | null;
-  oscillators: OscillatorNode[];
-  lfo: OscillatorNode | null;
-  lfoGain: GainNode | null;
-  intervalId: number | null;
-}
-
-const musicNodes: MusicNodes = {
-  masterGain: null,
-  filter: null,
-  oscillators: [],
-  lfo: null,
-  lfoGain: null,
-  intervalId: null,
-};
-
-function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
-    }
-  }
-  if (audioCtx && audioCtx.state === 'suspended') {
-    void audioCtx.resume();
-  }
-  return audioCtx;
-}
-
-function createImpulse(ctx: AudioContext, duration = 2.1, decay = 2.7): AudioBuffer {
-  const rate = ctx.sampleRate;
-  const length = Math.floor(rate * duration);
-  const impulse = ctx.createBuffer(2, length, rate);
-  for (let channel = 0; channel < 2; channel++) {
-    const data = impulse.getChannelData(channel);
-    for (let i = 0; i < length; i++) {
-      const t = i / length;
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
-    }
-  }
-  return impulse;
-}
-
-function getBus(ctx: AudioContext): AudioBus {
-  if (bus && busCtx === ctx) return bus;
-
-  const input = ctx.createGain();
-  input.gain.value = 0.88;
-
-  const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -18;
-  compressor.knee.value = 24;
-  compressor.ratio.value = 3.5;
-  compressor.attack.value = 0.004;
-  compressor.release.value = 0.28;
-
-  const reverb = ctx.createConvolver();
-  reverb.buffer = createImpulse(ctx);
-
-  const wet = ctx.createGain();
-  wet.gain.value = 0.22;
-
-  input.connect(compressor);
-  compressor.connect(ctx.destination);
-  reverb.connect(wet);
-  wet.connect(compressor);
-
-  bus = { input, reverb, wet, compressor };
-  busCtx = ctx;
-  return bus;
-}
-
-/** Route a cue through the mastered bus, with an optional reverb send. */
-function connectOutput(node: AudioNode, reverbSend = 0.12): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  const b = getBus(ctx);
-  node.connect(b.input);
-  if (reverbSend > 0) {
-    const send = ctx.createGain();
-    send.gain.value = reverbSend;
-    node.connect(send);
-    send.connect(b.reverb);
-  }
-}
-
-function createNoiseBuffer(
-  ctx: AudioContext,
-  duration: number,
-  shape: (p: number, t: number) => number,
-): AudioBuffer {
-  const size = Math.floor(ctx.sampleRate * duration);
-  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < size; i++) {
-    const p = i / size;
-    const t = i / ctx.sampleRate;
-    data[i] = (Math.random() * 2 - 1) * shape(p, t);
-  }
-  return buffer;
-}
-
-export const setSoundEnabled = (enabled: boolean) => {
-  soundEnabled = enabled;
+/** at most one warning per missing/failed item */
+const warned = new Set<string>();
+function warnOnce(key: string, message: string): void {
+  if (warned.has(key)) return;
+  warned.add(key);
   try {
-    localStorage.setItem('tramvay_sound_enabled', enabled ? 'true' : 'false');
+    console.warn(`[audio] ${message}`);
   } catch {
-    // Ignore
+    /* ignore */
   }
+}
 
-  if (!enabled) {
-    stopMusicBed();
-  } else {
-    startMusicBed();
-  }
-};
+/* ------------------------------------------------------------------ *
+ * Preferences
+ * ------------------------------------------------------------------ */
 
 export const getSoundEnabled = (): boolean => {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return soundEnabled;
   try {
-    const saved = localStorage.getItem('tramvay_sound_enabled');
-    if (saved !== null) {
-      soundEnabled = saved === 'true';
-    }
+    const saved = window.localStorage.getItem(STORAGE_SOUND);
+    if (saved !== null) soundEnabled = saved === 'true';
   } catch {
-    // Ignore
+    /* ignore */
   }
   return soundEnabled;
 };
 
-// ==========================================
-// 1. AMBIENT MUSIC BED
-// ==========================================
+export const setSoundEnabled = (enabled: boolean): void => {
+  soundEnabled = enabled;
+  try {
+    window.localStorage.setItem(STORAGE_SOUND, enabled ? 'true' : 'false');
+  } catch {
+    /* ignore */
+  }
+  if (!engine) return;
+  try {
+    const now = engine.ctx.currentTime;
+    engine.master.gain.cancelScheduledValues(now);
+    engine.master.gain.setTargetAtTime(enabled ? volume : 0, now, 0.08);
+    if (!enabled) {
+      stopAllCues();
+    } else {
+      startAmbience();
+    }
+  } catch {
+    /* ignore */
+  }
+};
 
-// Fmaj7 -> Dm9 -> Bbmaj7 -> C9sus4, voiced low and warm.
-const CHORD_PROGRESSIONS = [
-  [174.61, 220.0, 261.63, 329.63, 349.23],
-  [146.83, 220.0, 261.63, 293.66, 329.63],
-  [116.54, 174.61, 233.08, 293.66, 349.23],
-  [130.81, 196.0, 261.63, 293.66, 392.0],
-];
+export const getVolume = (): number => {
+  if (typeof window === 'undefined') return volume;
+  try {
+    const saved = window.localStorage.getItem(STORAGE_VOLUME);
+    if (saved !== null) {
+      const parsed = Number(saved);
+      if (Number.isFinite(parsed)) volume = Math.min(1, Math.max(0, parsed));
+    }
+  } catch {
+    /* ignore */
+  }
+  return volume;
+};
 
-let currentChordIndex = 0;
+export const setVolume = (next: number): void => {
+  volume = Math.min(1, Math.max(0, Number.isFinite(next) ? next : 0.7));
+  try {
+    window.localStorage.setItem(STORAGE_VOLUME, String(volume));
+  } catch {
+    /* ignore */
+  }
+  if (!engine) return;
+  try {
+    const now = engine.ctx.currentTime;
+    engine.master.gain.cancelScheduledValues(now);
+    engine.master.gain.setTargetAtTime(soundEnabled ? volume : 0, now, 0.06);
+  } catch {
+    /* ignore */
+  }
+};
 
-export const startMusicBed = () => {
+/* ------------------------------------------------------------------ *
+ * Boot
+ * ------------------------------------------------------------------ */
+
+const isBrowser = (): boolean => typeof window !== 'undefined';
+
+function createContext(): Ctx | null {
+  if (!isBrowser()) return null;
+  type WindowWithWebkit = Window & { webkitAudioContext?: typeof AudioContext };
+  const Ctor = window.AudioContext ?? (window as WindowWithWebkit).webkitAudioContext;
+  if (!Ctor) {
+    warnOnce('no-webaudio', 'Web Audio API is not available; running silently.');
+    return null;
+  }
+  try {
+    return new Ctor();
+  } catch {
+    warnOnce('ctx-fail', 'Could not create an AudioContext; running silently.');
+    return null;
+  }
+}
+
+/**
+ * Prefetch the sprite and ambience bytes on page load. No AudioContext is
+ * created here — that only happens inside a user gesture (`unlockAudio`).
+ */
+export const preloadAudio = (): void => {
+  if (!isBrowser()) return;
+  if (!preloadPromise) preloadPromise = fetchSfx();
+};
+
+function fetchSfx(): Promise<SfxPayload | null> {
+  preloadStarted = true;
+  return (async () => {
+    let sprite: SpriteMap | null = null;
+    // sprite map first: it tells us where the slices are
+    try {
+      const res = await fetch(SFX_MAP_URL, { cache: 'force-cache' });
+      if (res.ok) {
+        const text = await res.text();
+        if (!text.trimStart().startsWith('<')) {
+          const parsed = JSON.parse(text) as { sprite?: SpriteMap };
+          if (parsed?.sprite && typeof parsed.sprite === 'object') {
+            sprite = parsed.sprite;
+            pendingSprite = parsed.sprite;
+          }
+        } else {
+          warnOnce('sfx-json', `Could not load ${SFX_MAP_URL}; using built-in slice map.`);
+        }
+      } else {
+        warnOnce('sfx-json', `Could not load ${SFX_MAP_URL}; using built-in slice map.`);
+      }
+    } catch {
+      warnOnce('sfx-json', `Could not load ${SFX_MAP_URL}; using built-in slice map.`);
+    }
+
+    const url = pickSfxUrl();
+    if (!url) {
+      warnOnce('sfx-format', 'No supported audio format for the SFX sprite; running silently.');
+      return null;
+    }
+    try {
+      const res = await fetch(url, { cache: 'force-cache' });
+      if (!res.ok) {
+        warnOnce('sfx-fetch', `Could not load ${url}; effects will be silent.`);
+        return null;
+      }
+      const type = res.headers.get('content-type') ?? '';
+      if (type.includes('text/html')) {
+        // SPA fallback served index.html with 200
+        warnOnce('sfx-fetch', `Could not load ${url}; effects will be silent.`);
+        return null;
+      }
+      const bytes = await res.arrayBuffer();
+      // ambience in the background; it is only needed once playback starts
+      void prefetchAmbience();
+      return { bytes, sprite };
+    } catch {
+      warnOnce('sfx-fetch', `Could not load ${url}; effects will be silent.`);
+      return null;
+    }
+  })();
+}
+
+let pendingSprite: SpriteMap | null = null;
+let pendingAmbience: Promise<ArrayBuffer | null> | null = null;
+
+function pickSfxUrl(): string | null {
+  if (!isBrowser()) return null;
+  const probe =
+    typeof document !== 'undefined'
+      ? document.createElement('audio')
+      : (null as unknown as HTMLAudioElement);
+  for (const format of SFX_FORMATS) {
+    if (format.type === 'audio/wav') return format.url; // last resort
+    if (!probe) continue;
+    const can = probe.canPlayType(format.type);
+    if (can === 'probably' || can === 'maybe') return format.url;
+  }
+  return SFX_FORMATS[SFX_FORMATS.length - 1].url;
+}
+
+function prefetchAmbience(): Promise<ArrayBuffer | null> {
+  if (pendingAmbience) return pendingAmbience;
+  pendingAmbience = (async () => {
+    for (const candidate of AMBIENCE_URLS) {
+      try {
+        const res = await fetch(candidate, { cache: 'force-cache' });
+        if (!res.ok) continue;
+        const type = res.headers.get('content-type') ?? '';
+        if (type.includes('text/html')) continue;
+        return await res.arrayBuffer();
+      } catch {
+        continue;
+      }
+    }
+    warnOnce('ambience-fetch', 'Could not load the ambience loop; continuing without it.');
+    return null;
+  })();
+  return pendingAmbience;
+}
+
+async function decode(ctx: Ctx, bytes: ArrayBuffer, key: string): Promise<AudioBuffer | null> {
+  try {
+    return await ctx.decodeAudioData(bytes.slice(0));
+  } catch {
+    warnOnce(key, 'An audio file failed to decode; that part will be silent.');
+    return null;
+  }
+}
+
+function buildGraph(ctx: Ctx): Engine {
+  const master = ctx.createGain();
+  master.gain.value = soundEnabled ? volume : 0;
+
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -3;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.12;
+  limiter.connect(ctx.destination);
+
+  master.connect(limiter);
+
+  const sfxBus = ctx.createGain();
+  sfxBus.gain.value = 0.9;
+  sfxBus.connect(master);
+
+  const ambienceBus = ctx.createGain();
+  ambienceBus.gain.value = 0;
+  const ambienceDuck = ctx.createGain();
+  ambienceDuck.gain.value = 1;
+  ambienceBus.connect(ambienceDuck);
+  ambienceDuck.connect(master);
+
+  const rumbleBus = ctx.createGain();
+  rumbleBus.gain.value = 0;
+  rumbleBus.connect(master);
+
+  return {
+    ctx,
+    master,
+    limiter,
+    sfxBus,
+    ambienceBus,
+    ambienceDuck,
+    rumbleBus,
+    sfxBuffer: null,
+    ambienceBuffer: null,
+    sprite: { ...FALLBACK_SLICES },
+    format: null,
+  };
+}
+
+/**
+ * Called synchronously inside the Start gesture. Creates the context, resumes
+ * it, and starts decoding. Resolves when the SFX sprite is ready; the ambience
+ * keeps loading/starting in the background.
+ */
+export const unlockAudio = (): Promise<void> => {
+  if (unlockPromise) return unlockPromise;
+  unlockPromise = (async () => {
+    if (!isBrowser()) return;
+    const ctx = createContext();
+    if (!ctx) return;
+
+    getSoundEnabled();
+    getVolume();
+    const created = buildGraph(ctx);
+    engine = created;
+
+    // gesture-safe resume
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+    } catch {
+      /* ignore */
+    }
+
+    bindVisibility();
+
+    // the preload may never have been started (e.g. unlock called from a key)
+    if (!preloadStarted) preloadAudio();
+    let payload: SfxPayload | null = null;
+    try {
+      payload = await (preloadPromise ?? Promise.resolve(null));
+    } catch {
+      payload = null;
+    }
+
+    if (payload?.bytes) {
+      const decoded = await decode(ctx, payload.bytes, 'sfx-decode');
+      if (decoded) created.sfxBuffer = decoded;
+    }
+    const sprite = payload?.sprite ?? pendingSprite;
+    if (sprite) created.sprite = sprite;
+
+    // probe the sprite: some decoders return a zero-length buffer for a
+    // truncated file, and every play would then start out of range.
+    try {
+      if (payload?.bytes && (!created.sfxBuffer || created.sfxBuffer.duration < 0.5)) {
+        created.sfxBuffer = null;
+        warnOnce('sfx-empty', 'The SFX sprite decoded to an unusable buffer; effects will be silent.');
+      }
+    } catch {
+      created.sfxBuffer = null;
+    }
+
+    startAmbience();
+    void pendingAmbience?.then(async (ambBytes) => {
+      if (!ambBytes || !engine || engine !== created) return;
+      const amb = await decode(created.ctx, ambBytes, 'ambience-decode');
+      if (amb) {
+        created.ambienceBuffer = amb;
+        startAmbience();
+      }
+    });
+  })().catch(() => {
+    /* never throw at the game */
+  });
+  return unlockPromise;
+};
+
+/* ------------------------------------------------------------------ *
+ * Ambience
+ * ------------------------------------------------------------------ */
+
+let ambienceSource: AudioBufferSourceNode | null = null;
+let ambienceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function startAmbience(): void {
+  if (!engine || !engine.ambienceBuffer) return;
   if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  if (musicNodes.masterGain) return;
+  const { ctx, ambienceBus, ambienceBuffer } = engine;
+  try {
+    if (ambienceSource) {
+      const now = ctx.currentTime;
+      ambienceBus.gain.cancelScheduledValues(now);
+      ambienceBus.gain.setTargetAtTime(AMBIENCE_LEVEL, now, 0.4);
+      return;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = ambienceBuffer;
+    src.loop = true;
+    src.connect(ambienceBus);
+    src.start();
+    ambienceSource = src;
+    const now = ctx.currentTime;
+    ambienceBus.gain.cancelScheduledValues(now);
+    ambienceBus.gain.setValueAtTime(0.0001, now);
+    ambienceBus.gain.linearRampToValueAtTime(AMBIENCE_LEVEL, now + TIMING.ambienceFadeIn);
+  } catch {
+    warnOnce('ambience-start', 'Could not start the ambience loop.');
+  }
+}
+
+const AMBIENCE_LEVEL = 0.5; // the buffer itself is mastered to -26 LUFS
+
+function duckAmbience(target: number, seconds: number): void {
+  if (!engine) return;
+  try {
+    const now = engine.ctx.currentTime;
+    engine.ambienceDuck.gain.cancelScheduledValues(now);
+    engine.ambienceDuck.gain.setTargetAtTime(target, now, Math.max(0.01, seconds / 3));
+  } catch {
+    /* ignore */
+  }
+}
+
+function restoreAmbience(seconds = 2): void {
+  duckAmbience(1, seconds);
+}
+
+/* ------------------------------------------------------------------ *
+ * Slice playback
+ * ------------------------------------------------------------------ */
+
+interface ActiveVoice {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  tag: string;
+}
+
+const activeVoices = new Set<ActiveVoice>();
+const lastVariant = new Map<string, string>();
+let timers: ReturnType<typeof setTimeout>[] = [];
+
+function later(fn: () => void, ms: number): void {
+  const id = setTimeout(() => {
+    timers = timers.filter((t) => t !== id);
+    try {
+      fn();
+    } catch {
+      /* ignore */
+    }
+  }, ms);
+  timers.push(id);
+}
+
+function clearTimers(): void {
+  for (const id of timers) clearTimeout(id);
+  timers = [];
+}
+
+function resolveName(name: string): string {
+  const count = VARIANT_GROUPS[name];
+  if (!count || count < 2) return name;
+  const before = lastVariant.get(name);
+  const options: string[] = [];
+  for (let i = 1; i <= count; i++) options.push(`${name}_${i}`);
+  const filtered = options.filter((o) => o !== before);
+  const pool = filtered.length ? filtered : options;
+  const pick = pool[Math.floor(Math.random() * pool.length)] ?? options[0];
+  lastVariant.set(name, pick);
+  return pick;
+}
+
+function playSprite(
+  name: string,
+  { gain = 1, rate = 1, tag = name, when = 0 }: { gain?: number; rate?: number; tag?: string; when?: number } = {},
+): void {
+  if (!engine || !soundEnabled) return;
+  const { ctx, sfxBuffer, sprite, sfxBus } = engine;
+  if (!sfxBuffer || !sfxBuffer.getChannelData) return;
+
+  const sliceName = resolveName(name);
+  const slice = sprite[sliceName] ?? sprite[name];
+  if (!slice) {
+    warnOnce(`slice-${name}`, `No sprite slice named "${sliceName}".`);
+    return;
+  }
+
+  const actualRate = TONAL.has(name) ? 1 : rate;
+  const start = Math.max(0, slice[0] / 1000);
+  const dur = Math.max(0.01, slice[1] / 1000);
+  const offset = Math.min(start, Math.max(0, sfxBuffer.duration - 0.02));
+  const playDur = Math.min(dur, Math.max(0.01, sfxBuffer.duration - offset - 0.005));
 
   try {
-    const now = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = sfxBuffer;
+    source.playbackRate.value = actualRate;
 
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0, now);
-    masterGain.gain.linearRampToValueAtTime(0.052, now + 2.4);
+    const g = ctx.createGain();
+    const t0 = ctx.currentTime + Math.max(0, when);
+    const fade = 0.006;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.003);
+    g.gain.setValueAtTime(gain, t0 + Math.max(0.004, playDur - fade));
+    g.gain.linearRampToValueAtTime(0.0001, t0 + playDur);
+
+    source.connect(g);
+    g.connect(sfxBus);
+    source.start(t0, offset, playDur + 0.02);
+    source.stop(t0 + playDur + 0.02);
+
+    const voice: ActiveVoice = { source, gain: g, tag };
+    activeVoices.add(voice);
+    source.onended = () => {
+      activeVoices.delete(voice);
+      try {
+        g.disconnect();
+        source.disconnect();
+      } catch {
+        /* ignore */
+      }
+    };
+  } catch {
+    warnOnce('play-fail', 'A sound could not be played.');
+  }
+}
+
+/** ±4 % playback-rate jitter, never applied to tonal material. */
+const jitterRate = (): number => 0.96 + Math.random() * 0.08;
+
+/* ------------------------------------------------------------------ *
+ * Rumble (approach) — looped brown noise + sweeping lowpass
+ * ------------------------------------------------------------------ */
+
+interface RumbleState {
+  source: AudioBufferSourceNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
+  clackTimer: ReturnType<typeof setTimeout> | null;
+  interval: number;
+  stopped: boolean;
+}
+
+let rumble: RumbleState | null = null;
+const RUMBLE_SECONDS = 2;
+
+const rumbleBufferCache = new WeakMap<Ctx, AudioBuffer>();
+
+function rumbleBuffer(ctx: Ctx): AudioBuffer {
+  const cached = rumbleBufferCache.get(ctx);
+  if (cached) return cached;
+  const length = Math.floor(ctx.sampleRate * RUMBLE_SECONDS);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  // brown noise, loop-shaped: a raised-cosine envelope at both ends so the wrap
+  // is inaudible, plus a leaky integrator for the low rumble
+  let last = 0;
+  let dc = 0;
+  for (let i = 0; i < length; i++) {
+    const white = Math.random() * 2 - 1;
+    last = (last + 0.02 * white) / 1.02;
+    const fade = Math.min(1, Math.min(i, length - i) / (ctx.sampleRate * 0.03));
+    data[i] = last * 3.2 * fade;
+    dc += data[i];
+  }
+  dc /= length;
+  for (let i = 0; i < length; i++) data[i] -= dc;
+  rumbleBufferCache.set(ctx, buffer);
+  return buffer;
+}
+
+function scheduleClacks(state: RumbleState): void {
+  if (state.stopped || !engine) return;
+  const progress = Math.min(1, 1 - state.interval / TIMING.clackStartInterval);
+  playSprite('clack', { gain: 0.25 + progress * 0.45, rate: jitterRate(), tag: 'rumble-clack' });
+  state.interval = Math.max(TIMING.clackMinInterval, state.interval * TIMING.clackIntervalFactor);
+  state.clackTimer = setTimeout(() => scheduleClacks(state), state.interval * 1000);
+}
+
+function startRumble(seconds: number): void {
+  if (!engine || !soundEnabled) return;
+  const { ctx, rumbleBus } = engine;
+  const duration = Math.max(0.4, seconds);
+  try {
+    stopRumble(0.05);
+    const source = ctx.createBufferSource();
+    source.buffer = rumbleBuffer(ctx);
+    source.loop = true;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(420, now);
-    filter.Q.value = 0.6;
+    filter.Q.value = 0.9;
 
-    // Very slow filter breathing keeps the pad from feeling static.
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.value = 0.055;
-    lfoGain.gain.value = 85;
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-    lfo.start(now);
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    filter.frequency.setValueAtTime(TIMING.rumbleCutoffStart, now);
+    filter.frequency.exponentialRampToValueAtTime(TIMING.rumbleCutoffEnd, now + duration);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.5, now + duration * 0.9);
 
-    filter.connect(masterGain);
-    connectOutput(masterGain, 0.28);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(rumbleBus);
+    source.start(now);
 
-    musicNodes.masterGain = masterGain;
-    musicNodes.filter = filter;
-    musicNodes.lfo = lfo;
-    musicNodes.lfoGain = lfoGain;
-
-    const playChord = (frequencies: number[]) => {
-      if (!musicNodes.masterGain || !audioCtx) return;
-
-      const stopAt = audioCtx.currentTime + 0.9;
-      musicNodes.oscillators.forEach((osc) => {
-        try {
-          osc.stop(stopAt);
-        } catch {
-          // Ignore
-        }
-      });
-      musicNodes.oscillators = [];
-
-      const chordTime = audioCtx.currentTime;
-      frequencies.forEach((freq, idx) => {
-        const osc = audioCtx!.createOscillator();
-        const oscGain = audioCtx!.createGain();
-
-        osc.type = idx === 0 ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq, chordTime);
-        osc.detune.value = (idx - 2) * 2.5;
-
-        oscGain.gain.setValueAtTime(0, chordTime);
-        oscGain.gain.linearRampToValueAtTime(0.19, chordTime + 1.25);
-        oscGain.gain.exponentialRampToValueAtTime(0.13, chordTime + 4.8);
-
-        osc.connect(oscGain);
-        oscGain.connect(filter);
-        osc.start(chordTime);
-        musicNodes.oscillators.push(osc);
-      });
+    const state: RumbleState = {
+      source,
+      filter,
+      gain,
+      clackTimer: null,
+      interval: TIMING.clackStartInterval,
+      stopped: false,
     };
-
-    playChord(CHORD_PROGRESSIONS[currentChordIndex]);
-
-    musicNodes.intervalId = window.setInterval(() => {
-      if (!soundEnabled || !musicNodes.masterGain) return;
-      currentChordIndex = (currentChordIndex + 1) % CHORD_PROGRESSIONS.length;
-      playChord(CHORD_PROGRESSIONS[currentChordIndex]);
-    }, 5800);
+    rumble = state;
+    state.clackTimer = setTimeout(() => scheduleClacks(state), 180);
   } catch {
-    // Ignore audio context errors.
+    warnOnce('rumble', 'Could not start the tram rumble.');
   }
-};
+}
 
-export const stopMusicBed = () => {
-  if (musicNodes.intervalId) {
-    clearInterval(musicNodes.intervalId);
-    musicNodes.intervalId = null;
-  }
-
-  // Detach state immediately so a quick off→on toggle can restart the bed.
-  const masterGain = musicNodes.masterGain;
-  const filter = musicNodes.filter;
-  const lfo = musicNodes.lfo;
-  const lfoGain = musicNodes.lfoGain;
-  const oscillators = [...musicNodes.oscillators];
-
-  musicNodes.masterGain = null;
-  musicNodes.filter = null;
-  musicNodes.lfo = null;
-  musicNodes.lfoGain = null;
-  musicNodes.oscillators = [];
-
-  if (!masterGain || !audioCtx) return;
-
-  const now = audioCtx.currentTime;
+function stopRumble(fade = 0.12): void {
+  const state = rumble;
+  rumble = null;
+  if (!state) return;
+  state.stopped = true;
+  if (state.clackTimer) clearTimeout(state.clackTimer);
   try {
-    masterGain.gain.cancelScheduledValues(now);
-    masterGain.gain.linearRampToValueAtTime(0.001, now + 1.6);
-    setTimeout(() => {
-      oscillators.forEach((osc) => {
-        try {
-          osc.stop();
-        } catch {
-          // Ignore
-        }
-      });
+    const now = engine ? engine.ctx.currentTime : 0;
+    state.gain.gain.cancelScheduledValues(now);
+    state.gain.gain.setTargetAtTime(0, now, Math.max(0.01, fade / 3));
+    state.source.stop(now + fade + 0.05);
+    state.source.onended = () => {
       try {
-        lfo?.stop();
-        lfo?.disconnect();
-        lfoGain?.disconnect();
-        filter?.disconnect();
-        masterGain.disconnect();
+        state.source.disconnect();
+        state.filter.disconnect();
+        state.gain.disconnect();
       } catch {
-        // Ignore
+        /* ignore */
       }
-    }, 1750);
+    };
   } catch {
-    try {
-      masterGain.disconnect();
-    } catch {
-      // Ignore
+    /* ignore */
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Public cue API
+ * ------------------------------------------------------------------ */
+
+export const playPress = (): void => {
+  playSprite('press', { gain: 0.7, rate: jitterRate() });
+};
+
+export const playSwitch = (): void => {
+  playSprite('switch', { gain: 0.6, rate: jitterRate() });
+};
+
+export const playPaper = (): void => {
+  playSprite('paper', { gain: 0.55, rate: jitterRate() });
+};
+
+export const playHoverTick = (): void => {
+  if (!isBrowser()) return;
+  const fine = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+  if (!fine) return;
+  playSprite('hover', { gain: 0.18, rate: jitterRate() });
+};
+
+/**
+ * Decision cue. `approachSec` is the real animation length, so the rumble and
+ * the accelerating clacks land exactly on the animation end.
+ */
+export const playDecision = (pulled: boolean, approachSec: number): void => {
+  const seconds = Math.max(0.4, approachSec);
+  duckAmbience(0.35, 0.4);
+  if (pulled) {
+    playSprite('lever_clack', { gain: 0.9, rate: jitterRate() });
+    later(() => playSprite('bell', { gain: 0.5 }), TIMING.bellAfterLever * 1000);
+  } else {
+    playSprite('air_brake', { gain: 0.55, rate: jitterRate() });
+    later(() => playSprite('brake_squeal', { gain: 0.32, rate: jitterRate() }), TIMING.squealAfterBrake * 1000);
+    later(() => playSprite('drone', { gain: 0.2 }), 120);
+  }
+  startRumble(seconds);
+};
+
+export interface ImpactOptions {
+  mood?: 'relief' | 'dread' | 'absurd';
+  comic?: boolean;
+}
+
+/**
+ * Impact → stamp → mood sting. Returns the milliseconds from "impact" (which is
+ * when the tram animation ends) until the stamp lands, so the UI can reveal the
+ * verdict exactly on the ink stamp.
+ */
+export const playImpact = ({ mood = 'dread', comic = false }: ImpactOptions = {}): number => {
+  stopRumble(0.06);
+  clearTimers();
+  // silence beat: duck almost to zero so the impact lands in a hole
+  duckAmbience(0.02, 0.15);
+
+  const beatMs = Math.round(TIMING.silenceBeat * 1000);
+  const stampMs = Math.round(TIMING.stampAfterImpact * 1000);
+  const stingMs = Math.round(TIMING.stingAfterImpact * 1000);
+
+  later(() => {
+    if (comic) {
+      playSprite('crash_comic', { gain: 0.85, rate: jitterRate() });
+    } else {
+      playSprite('impact_muffled', { gain: 1, rate: jitterRate() });
     }
-  }
+    duckAmbience(0.3, 0.25);
+  }, beatMs);
+  later(() => playSprite('stamp', { gain: 0.95, rate: jitterRate() }), beatMs + stampMs);
+  later(() => {
+    playSprite(`sting_${mood}`, { gain: 0.45 });
+    restoreAmbience(2.5);
+  }, beatMs + stingMs);
+  // safety net: never leave the ambience ducked
+  later(() => restoreAmbience(2), beatMs + stingMs + 2500);
+
+  return IMPACT_TO_STAMP_MS;
 };
 
-/** Duck the bed during action, then restore it. */
-export const duckMusicBed = (duck: boolean) => {
-  if (!musicNodes.masterGain || !audioCtx) return;
-  const now = audioCtx.currentTime;
+/** Stop every scheduled cue, kill voices and restore the bed. */
+export const stopAllCues = (): void => {
+  clearTimers();
+  stopRumble(0.08);
+  for (const voice of Array.from(activeVoices)) {
+    try {
+      voice.source.stop();
+    } catch {
+      /* ignore */
+    }
+    activeVoices.delete(voice);
+  }
+  restoreAmbience(1.2);
+};
+
+/* ------------------------------------------------------------------ *
+ * Legacy aliases — kept so older call sites keep working
+ * ------------------------------------------------------------------ */
+
+/** The stamp and the mood sting replace the old reveal chime. */
+export const playRevealChime = (): void => {};
+
+/** The stamp and the mood sting replace the old foil sweep. */
+export const playFoilSweep = (): void => {};
+
+export const startMusicBed = (): void => {
+  startAmbience();
+};
+
+export const stopMusicBed = (): void => {
+  if (!engine) return;
   try {
-    const targetGain = duck ? 0.022 : 0.052;
-    musicNodes.masterGain.gain.cancelScheduledValues(now);
-    musicNodes.masterGain.gain.linearRampToValueAtTime(targetGain, now + 0.32);
+    const now = engine.ctx.currentTime;
+    engine.ambienceDuck.gain.cancelScheduledValues(now);
+    engine.ambienceBus.gain.cancelScheduledValues(now);
+    engine.ambienceBus.gain.setTargetAtTime(0.0001, now, 0.4);
   } catch {
-    // Ignore
+    /* ignore */
   }
 };
 
-// ==========================================
-// 2. REFINED CUES
-// ==========================================
-
-/** A tiny, almost subliminal hover blip. */
-export const playHoverTick = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(1720, now);
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.022, now + 0.006);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
-
-  osc.connect(gain);
-  connectOutput(gain, 0.08);
-  osc.start(now);
-  osc.stop(now + 0.05);
+export const duckMusicBed = (duck: boolean): void => {
+  duckAmbience(duck ? 0.3 : 1, 0.3);
 };
 
-/** Crisp brass-and-wood lever snap: noise transient + metallic ping. */
-export const playLeverSnap = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, 0.07, (p) => Math.pow(1 - p, 2) * 0.6);
-  const noiseFilter = ctx.createBiquadFilter();
-  noiseFilter.type = 'bandpass';
-  noiseFilter.frequency.setValueAtTime(1250, now);
-  noiseFilter.Q.value = 1.1;
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.075, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
-  noise.connect(noiseFilter);
-  noiseFilter.connect(noiseGain);
-  connectOutput(noiseGain, 0.12);
-  noise.start(now);
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(1180, now);
-  osc.frequency.exponentialRampToValueAtTime(420, now + 0.09);
-  gain.gain.setValueAtTime(0.11, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  osc.connect(gain);
-  connectOutput(gain, 0.22);
-  osc.start(now);
-  osc.stop(now + 0.13);
+export const playSwitchLight = playSwitch;
+export const playLeverSnap = playSwitch;
+export const playTinyClick = playSwitch;
+export const playSoftTick = (_step = 0): void => {
+  playSwitch();
+};
+export const playPaperSwish = playPaper;
+export const playPremiumTransition = playPaper;
+export const playPencilScratch = playPaper;
+export const playSonicSignatureMotif = (): void => {
+  playSprite('bell', { gain: 0.45 });
+};
+export const playDecisionWhoosh = (): void => {
+  playSprite('air_brake', { gain: 0.4 });
+};
+export const playRisingSweep = (): void => {
+  playSprite('drone', { gain: 0.22 });
+};
+export const playLowThump = (): void => {
+  playSprite('impact_muffled', { gain: 0.55, rate: jitterRate() });
+};
+export const playChordSwell = (): void => {
+  playSprite('sting_relief', { gain: 0.4 });
+};
+/** Summary payoff: stamp, then a relief sting. */
+export const playSummaryReveal = (): void => {
+  playSprite('stamp', { gain: 0.9, rate: jitterRate() });
+  later(() => playSprite('sting_relief', { gain: 0.4 }), 320);
 };
 
-/** Legacy alias kept for existing call sites. */
-export const playTinyClick = () => {
-  playLeverSnap();
-};
+/* ------------------------------------------------------------------ *
+ * Visibility
+ * ------------------------------------------------------------------ */
 
-/** Airy whoosh when a decision is locked in. */
-export const playDecisionWhoosh = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+let visibilityBound = false;
 
-  duckMusicBed(true);
-  const now = ctx.currentTime;
-  const duration = 0.52;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.42);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(380, now);
-  filter.frequency.exponentialRampToValueAtTime(1750, now + duration * 0.7);
-  filter.Q.value = 0.8;
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.001, now);
-  gain.gain.linearRampToValueAtTime(0.085, now + 0.1);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.26);
-  noise.start(now);
-
-  const tone = ctx.createOscillator();
-  const toneGain = ctx.createGain();
-  tone.type = 'sine';
-  tone.frequency.setValueAtTime(180, now);
-  tone.frequency.exponentialRampToValueAtTime(92, now + duration);
-  toneGain.gain.setValueAtTime(0.055, now);
-  toneGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  tone.connect(toneGain);
-  connectOutput(toneGain, 0.18);
-  tone.start(now);
-  tone.stop(now + duration + 0.02);
-
-  setTimeout(() => duckMusicBed(false), 820);
-};
-
-/** Brass-like three-note reveal chime with a long, soft tail. */
-export const playRevealChime = (intensity = 1) => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-
-  notes.forEach((freq, idx) => {
-    const t = now + idx * 0.11;
-    const osc = ctx.createOscillator();
-    const shimmer = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    shimmer.type = 'triangle';
-    shimmer.frequency.setValueAtTime(freq * 2, t);
-    shimmer.detune.value = 4;
-
-    const shimmerGain = ctx.createGain();
-    shimmerGain.gain.value = 0.18;
-
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.075 * intensity, t + 0.018);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
-
-    osc.connect(gain);
-    shimmer.connect(shimmerGain);
-    shimmerGain.connect(gain);
-    connectOutput(gain, 0.45);
-
-    osc.start(t);
-    shimmer.start(t);
-    osc.stop(t + 0.98);
-    shimmer.stop(t + 0.98);
+function bindVisibility(): void {
+  if (visibilityBound || typeof document === 'undefined') return;
+  visibilityBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (!engine) return;
+    try {
+      if (document.hidden) {
+        void engine.ctx.suspend();
+      } else if (soundEnabled) {
+        void engine.ctx.resume();
+      }
+    } catch {
+      /* ignore */
+    }
   });
-};
-
-/** Paper swish with a soft high shimmer — the signature scene transition. */
-export const playPaperSwish = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.58;
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.5);
-
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(720, now);
-  filter.frequency.linearRampToValueAtTime(2800, now + duration * 0.5);
-  filter.frequency.linearRampToValueAtTime(620, now + duration);
-
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.095, now);
-  gain.gain.exponentialRampToValueAtTime(0.004, now + duration);
-
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.2);
-  noise.start(now);
-};
-
-/** Thin brass-foil shimmer for blueprint scene transitions. */
-export const playFoilSweep = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.78;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.32);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'highpass';
-  filter.frequency.setValueAtTime(1700, now);
-  filter.frequency.linearRampToValueAtTime(5200, now + duration);
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.001, now);
-  gain.gain.linearRampToValueAtTime(0.042, now + 0.12);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.34);
-  noise.start(now);
-
-  [1567.98, 2093.0].forEach((freq, idx) => {
-    const t = now + 0.08 + idx * 0.16;
-    const osc = ctx.createOscillator();
-    const ping = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    ping.gain.setValueAtTime(0, t);
-    ping.gain.linearRampToValueAtTime(0.026, t + 0.01);
-    ping.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    osc.connect(ping);
-    connectOutput(ping, 0.42);
-    osc.start(t);
-    osc.stop(t + 0.32);
-  });
-};
-
-export const playPremiumTransition = () => {
-  playPaperSwish();
-  playFoilSweep();
-  playRevealChime(0.42);
-};
-
-/** Pencil scratch: low-passed noise with a gentle flutter. */
-export const playPencilScratch = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.24;
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (_p, t) => {
-    const flutter = 0.5 + 0.5 * Math.sin(2 * Math.PI * 11 * t);
-    return flutter * 0.35;
-  });
-
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(1400, now);
-  filter.Q.value = 1.5;
-
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.09, now);
-  gain.gain.exponentialRampToValueAtTime(0.008, now + duration);
-
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.12);
-  noise.start(now);
-};
-
-/** Short sine blip for small UI toggles. */
-export const playSoftTick = (step = 0) => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const frequencies = [880, 1100, 1320];
-  const freq = frequencies[step % frequencies.length];
-  const now = ctx.currentTime;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(freq, now);
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.075, now + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
-
-  osc.connect(gain);
-  connectOutput(gain, 0.18);
-  osc.start(now);
-  osc.stop(now + 0.115);
-};
-
-/** Sonic signature: sparse three-note bell motif. */
-export const playSonicSignatureMotif = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  duckMusicBed(true);
-  const now = ctx.currentTime;
-  const notes = [659.25, 783.99, 987.77]; // E5, G5, B5
-
-  notes.forEach((freq, idx) => {
-    const t = now + idx * 0.18;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.11, t + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-
-    osc.connect(gain);
-    connectOutput(gain, 0.42);
-    osc.start(t);
-    osc.stop(t + 0.72);
-  });
-
-  setTimeout(() => duckMusicBed(false), 1100);
-};
-
-/** Tram acceleration: rising sine glide plus a breath of filtered noise. */
-export const playRisingSweep = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  duckMusicBed(true);
-  const now = ctx.currentTime;
-  const duration = 1.55;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(320, now);
-  osc.frequency.exponentialRampToValueAtTime(880, now + duration);
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.082, now + 0.16);
-  gain.gain.linearRampToValueAtTime(0.082, now + duration * 0.82);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.connect(gain);
-  connectOutput(gain, 0.16);
-  osc.start(now);
-  osc.stop(now + duration + 0.04);
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.22);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(520, now);
-  filter.frequency.linearRampToValueAtTime(2600, now + duration);
-  filter.Q.value = 0.7;
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.035, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  noise.connect(filter);
-  filter.connect(noiseGain);
-  connectOutput(noiseGain, 0.12);
-  noise.start(now);
-
-  setTimeout(() => duckMusicBed(false), 1850);
-};
-
-/** Muted low impact with a soft body and reverb tail. */
-export const playLowThump = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.34;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(96, now);
-  osc.frequency.exponentialRampToValueAtTime(38, now + duration);
-  gain.gain.setValueAtTime(0.23, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.connect(gain);
-  connectOutput(gain, 0.26);
-  osc.start(now);
-  osc.stop(now + duration + 0.02);
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, 0.12, (p) => Math.pow(1 - p, 3) * 0.3);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(220, now);
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.06, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  noise.connect(filter);
-  filter.connect(noiseGain);
-  connectOutput(noiseGain, 0.18);
-  noise.start(now);
-
-  setTimeout(() => duckMusicBed(false), 460);
-};
-
-/** Five-voice chord for payoff / summary. */
-export const playChordSwell = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const freqs = [174.61, 261.63, 349.23, 440.0, 523.25, 659.25];
-  const duration = 2.7;
-
-  freqs.forEach((freq, idx) => {
-    const t = now + idx * 0.045;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = idx < 2 ? 'sine' : 'triangle';
-    osc.frequency.setValueAtTime(freq, t);
-    osc.detune.value = (idx - 2.5) * 1.8;
-
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.055, t + 0.45);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-
-    osc.connect(gain);
-    connectOutput(gain, 0.5);
-    osc.start(t);
-    osc.stop(t + duration + 0.02);
-  });
-};
-
-export const playSummaryReveal = () => {
-  if (!soundEnabled) return;
-  duckMusicBed(true);
-  playChordSwell();
-  playRevealChime(0.8);
-  setTimeout(() => duckMusicBed(false), 2600);
-};
+}

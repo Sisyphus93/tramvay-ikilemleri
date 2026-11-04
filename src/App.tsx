@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { DILEMMAS } from './data/dilemmas.ts';
-import { Decision, PlayerHistoryEntry } from './types.ts';
+import { Decision, PlayerHistoryEntry, DilemmaMood } from './types.ts';
 import { TrolleyHeader } from './components/TrolleyHeader.tsx';
 import { TrolleyCanvas } from './components/TrolleyCanvas.tsx';
 import { TrolleyControls } from './components/TrolleyControls.tsx';
@@ -16,19 +16,29 @@ import { TitleScreen } from './components/TitleScreen.tsx';
 import {
   getSoundEnabled,
   setSoundEnabled,
-  startMusicBed,
-  playSonicSignatureMotif,
-  playPremiumTransition,
-  playLeverSnap,
-  playDecisionWhoosh,
-  playRevealChime,
+  preloadAudio,
+  unlockAudio,
+  playPress,
+  playSwitch,
+  playPaper,
   playHoverTick,
-  playSoftTick,
+  playDecision,
+  playImpact,
+  stopAllCues,
 } from './utils/audio.ts';
+import { getTramAnimationSeconds } from './components/TrolleyCanvas.tsx';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
+/**
+ * Duration of the controls → verdict crossfade. `AnimatePresence mode="wait"`
+ * first plays the controls' exit (CONTROL_SWAP_MS) and only then mounts the
+ * verdict card, so the reveal timer fires this much early to keep the card
+ * entering exactly on the ink stamp. Purely visual timing, no design change.
+ */
+const CONTROL_SWAP_MS = 360;
 
 /**
  * Dilemmas read as "setup. question?" or "setup: prompt." — splitting them
@@ -83,19 +93,21 @@ export default function App() {
   const [soundEnabled, setSoundState] = useState<boolean>(() => getSoundEnabled());
   const lastHoverRef = useRef(0);
   const reduceMotion = useReducedMotion();
+  /** pending "reveal the verdict on the stamp" timer */
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** guards against a second onAnimationEnd (and duplicate history rows) */
+  const verdictGuardRef = useRef(false);
 
+  const clearRevealTimer = useCallback(() => {
+    if (revealTimerRef.current !== null) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+  }, []);
+
+  // Prefetch bytes only. No AudioContext exists until the Start gesture.
   useEffect(() => {
-    const startOnFirstGesture = () => {
-      if (getSoundEnabled()) startMusicBed();
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
-    window.addEventListener('pointerdown', startOnFirstGesture);
-    window.addEventListener('keydown', startOnFirstGesture);
-    return () => {
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
+    preloadAudio();
   }, []);
 
   useEffect(() => {
@@ -113,26 +125,27 @@ export default function App() {
 
   const toggleSound = useCallback(() => {
     const next = !soundEnabled;
+    // unlock on the same gesture if this is the very first click
+    if (next) void unlockAudio();
     setSoundState(next);
     setSoundEnabled(next);
-    playSoftTick(next ? 1 : 0);
+    if (next) playSwitch();
   }, [soundEnabled]);
 
   const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
 
   const handleStart = useCallback(() => {
-    startMusicBed();
-    playSonicSignatureMotif();
-    playPremiumTransition();
+    // Synchronous inside the gesture: this is the only place an AudioContext is born.
+    void unlockAudio();
+    playPress();
     setGameState('PLAYING');
   }, []);
 
   const handleLeverToggle = useCallback(() => {
     if (isAnimating || showResult) return;
-    setLeverPulled((prev) => {
-      playLeverSnap();
-      return !prev;
-    });
+    // never inside a setState updater: StrictMode runs those twice
+    playSwitch();
+    setLeverPulled((prev) => !prev);
   }, [isAnimating, showResult]);
 
   const handleMakeDecision = useCallback(
@@ -141,29 +154,39 @@ export default function App() {
 
       if (dec === 'diverted' && !leverPulled) {
         setLeverPulled(true);
-        playLeverSnap();
       } else if (dec === 'straight' && leverPulled) {
         setLeverPulled(false);
-        playLeverSnap();
       }
 
-      playDecisionWhoosh();
+      clearRevealTimer();
+      verdictGuardRef.current = false;
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
+      // real animation length, so the rumble ends exactly on the impact
+      playDecision(dec === 'diverted', getTramAnimationSeconds());
     },
-    [isAnimating, showResult, leverPulled]
+    [isAnimating, showResult, leverPulled, clearRevealTimer]
   );
 
+  /**
+   * The tram animation has ended: that is the impact. `playImpact` returns the
+   * ms until the ink stamp lands, and the verdict is revealed exactly then, so
+   * the result screen appears on the stamp. Controls stay locked meanwhile
+   * because `isAnimating` is still true.
+   */
   const handleAnimationEnd = useCallback(() => {
-    setIsAnimating(false);
-    setShowResult(true);
-    playRevealChime();
+    if (verdictGuardRef.current) return;
+    verdictGuardRef.current = true;
 
     const chosenTrack =
       decision === 'diverted'
         ? currentDilemma.divertedTrack
         : currentDilemma.straightTrack;
+
+    const mood: DilemmaMood =
+      currentDilemma.mood ?? (chosenTrack.isHuman ? 'dread' : 'absurd');
+    const msUntilStamp = playImpact({ mood, comic: currentDilemma.comic === true });
 
     const entry: PlayerHistoryEntry = {
       dilemmaId: currentDilemma.id,
@@ -174,11 +197,25 @@ export default function App() {
       materialDamageTL: chosenTrack.monetaryValueTL || 0,
     };
 
-    setHistory((prev) => [...prev, entry]);
-  }, [decision, currentDilemma]);
+    // the new card mounts after the controls' exit animation, so fire early
+    const swap = reduceMotion ? 0 : CONTROL_SWAP_MS;
+
+    clearRevealTimer();
+    revealTimerRef.current = setTimeout(() => {
+      revealTimerRef.current = null;
+      setIsAnimating(false);
+      setShowResult(true);
+      setHistory((prev) => (prev.some((h) => h.dilemmaId === entry.dilemmaId) ? prev : [...prev, entry]));
+    }, Math.max(0, msUntilStamp - swap));
+  }, [decision, currentDilemma, clearRevealTimer, reduceMotion]);
+
+  // clear the pending reveal if we ever unmount
+  useEffect(() => () => clearRevealTimer(), [clearRevealTimer]);
 
   const handleNextDilemma = useCallback(() => {
-    playPremiumTransition();
+    playPaper();
+    clearRevealTimer();
+    verdictGuardRef.current = false;
     if (currentStep < DILEMMAS.length - 1) {
       setCurrentStep((prev) => prev + 1);
       setDecision(null);
@@ -190,10 +227,13 @@ export default function App() {
       setGameState('SUMMARY');
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [currentStep]);
+  }, [currentStep, clearRevealTimer]);
 
   const handleRestart = useCallback(() => {
-    playPremiumTransition();
+    playPaper();
+    clearRevealTimer();
+    verdictGuardRef.current = false;
+    stopAllCues();
     setCurrentStep(0);
     setDecision(null);
     setLeverPulled(false);
@@ -202,7 +242,7 @@ export default function App() {
     setHistory([]);
     setGameState('TITLE');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [clearRevealTimer]);
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
 
@@ -212,8 +252,8 @@ export default function App() {
       if (isAnimating || showResult) return;
       const next = route === 'diverted';
       if (next === leverPulled) return;
+      playSwitch();
       setLeverPulled(next);
-      playLeverSnap();
     },
     [isAnimating, showResult, leverPulled]
   );
@@ -279,7 +319,7 @@ export default function App() {
         initial: { opacity: 0, y: 10 },
         animate: { opacity: 1, y: 0 },
         exit: { opacity: 0, y: -8 },
-        transition: { duration: 0.36, ease: EASE },
+        transition: { duration: CONTROL_SWAP_MS / 1000, ease: EASE },
       };
 
   const { setup, ask } = splitQuestion(currentDilemma.question);

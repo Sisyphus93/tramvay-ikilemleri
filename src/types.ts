@@ -60,9 +60,17 @@ export interface TrackTarget {
   monetaryValueTL?: number;
 }
 
+/** Mood decides which sting resolves a verdict (see data/dilemmas.ts). */
+export type DilemmaMood = 'relief' | 'dread' | 'absurd';
+
 export interface Dilemma {
   id: number;
   conceptualChoice?: boolean;
+  /** Verdict sting: relief = low stakes or a good outcome is plausible,
+   *  dread = real human deaths, absurd = ridiculous objects or scenarios. */
+  mood?: DilemmaMood;
+  /** Only a few of the most ridiculous dilemmas get the comic crash. */
+  comic?: boolean;
   title: string;
   question: string;
   straightTrack: TrackTarget;
