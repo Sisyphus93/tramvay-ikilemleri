@@ -9,7 +9,7 @@
  *  - no AudioContext before the Start gesture
  *  - start gesture -> context + sprite decode + ambience
  *  - lever/route/hover cues fire once, never twice (StrictMode-style double render)
- *  - decision -> impact -> stamp -> sting ordering
+ *  - decision -> impact -> stamp ordering (the stings were removed)
  *  - the verdict (result overlay) appears ~380 ms after the animation ends
  *  - no console errors, no unhandled rejections, no failed /audio requests
  *  - the missing-sfx.json failure path plays silently with one warning
@@ -113,7 +113,9 @@ class MockBufferSource extends MockNode {
       timeoutQueue.push({ id: nextId++, at, fn: () => this.onended && this.onended() });
     }
   }
-  stop() {}
+  stop(when = 0) {
+    audioLog.push({ t: now, kind: 'stop', offset: this._started?.offset, when });
+  }
 }
 
 class MockGain extends MockNode {
@@ -173,7 +175,7 @@ class MockAudioContext {
   createBufferSource() { return new MockBufferSource(this); }
   createBuffer(ch, len, sr) { return new MockAudioBuffer(ch, len, sr); }
   async decodeAudioData(bytes) {
-    const buf = new MockAudioBuffer(1, 18.4 * 44100, 44100);
+    const buf = new MockAudioBuffer(1, 13.7 * 44100, 44100);
     buf.__name = bytes && bytes.__name;
     audioLog.push({ t: now, kind: 'decode', name: buf.__name, bytes: bytes ? bytes.byteLength : 0 });
     return buf;
@@ -443,13 +445,67 @@ async function main() {
     const after = audioLog.filter((e) => e.kind === 'start' && e.name === 'sprite' && e.t >= keyAt);
     return after.length >= 4;
   })();
-  record(`at least 4 cues in the sequence (clacks, impact, stamp, sting): ${orderOk ? 'PASS' : 'FAIL'}`);
+  const stings = audioLog.filter((e) => e.kind === 'start' && e.name === 'sprite' && e.t >= keyAt).length;
+  record(`at least 4 cues in the sequence (clacks, impact, stamp): ${orderOk ? 'PASS' : 'FAIL'} (${stings} cues)`);
 
-  /* --- 5. next dilemma plays paper --- */
+  /* --- 5. advancing fades the outcome group out --- */
+  const stopsBefore = audioLog.filter((e) => e.kind === 'stop').length;
   const b3 = spriteStarts().length;
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
   await wait(600);
+  const swept = audioLog.filter((e) => e.kind === 'stop').length - stopsBefore;
   record(`next dilemma fired ${spriteStarts().length - b3} cue(s)`);
+  record(`advance faded ${swept} still-ringing outcome voice(s) ${swept >= 1 ? 'PASS' : 'FAIL'}`);
+
+  /* --- 5b. the audio settings popover --- */
+  const trigger = doc.querySelector('button[aria-label="Ses ayarları"]');
+  record(`settings trigger present: ${trigger ? 'PASS' : 'FAIL'}`);
+  trigger?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(30);
+  const panel = doc.querySelector('.audio-settings__panel');
+  const switches = Array.from(doc.querySelectorAll('.audio-settings__switch'));
+  const sliders = Array.from(doc.querySelectorAll('.audio-settings__slider'));
+  record(
+    `popover opens with two rows, two switches, two sliders: ${
+      panel && switches.length === 2 && sliders.length === 2 ? 'PASS' : 'FAIL'
+    } (${switches.length}/${sliders.length})`,
+  );
+  record(
+    `sliders show the persisted levels: ${sliders.map((el) => el.value).join('/')} ${
+      sliders.every((el) => el.value === '70') ? 'PASS' : 'FAIL'
+    }`,
+  );
+
+  const sfxSwitch = switches.find((el) => (el.getAttribute('aria-label') || '').includes('Efektler'));
+  const cueWhileMuted = (() => {
+    sfxSwitch?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    const before = spriteStarts().length;
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ' }));
+    return { before };
+  })();
+  await wait(300);
+  record(
+    `effects switched off blocks game cues: ${
+      spriteStarts().length - cueWhileMuted.before === 0 ? 'PASS' : 'FAIL'
+    }`,
+  );
+
+  sfxSwitch?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(60);
+  record(
+    `effects switched back on plays the preview tick: ${
+      spriteStarts().length - cueWhileMuted.before > 0 ? 'PASS' : 'FAIL'
+    }`,
+  );
+
+  const ambSwitch = switches.find((el) => (el.getAttribute('aria-label') || '').includes('Arka plan'));
+  ambSwitch?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(30);
+  record(`background switch toggles: ${ambSwitch?.getAttribute('aria-checked') === 'false' ? 'PASS' : 'FAIL'}`);
+
+  doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await wait(30);
+  record(`Escape closes the popover: ${doc.querySelector('.audio-settings__panel') ? 'FAIL' : 'PASS'}`);
 
   /* --- 6. sound off (M) must not fire a cue; on must fire one switch --- */
   const b4 = spriteStarts().length;

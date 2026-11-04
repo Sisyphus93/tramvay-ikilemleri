@@ -11,11 +11,12 @@
  * tones. The single exception is the tram rumble, which loops a pre-rendered
  * brown-noise bed and sweeps a filter over it at runtime.
  *
- * Graph:
+ * Graph — one master mute, and a separate user gain per bus so the two
+ * controls never fight each other:
  *
- *   sfx ───────────────► master ► limiter ► destination
- *   ambience ► duck ───┘
- *   rumble ────────────┘
+ *   sfx bus ──► sfxUserGain ─────────► master ► limiter ► destination
+ *   rumble  ──► sfx bus
+ *   ambience ► duck ─► ambienceUserGain ─┘
  *
  * Everything is defensive: if a file is missing, returns HTML (SPA fallback) or
  * fails to decode, the game plays silently and logs at most one warning per
@@ -27,12 +28,10 @@
  * ------------------------------------------------------------------ */
 
 export const TIMING = {
-  /** dead air between the impact and the ink stamp when no mood sting wants it */
+  /** dead air between the cut-off rumble and the impact */
   silenceBeat: 0.08,
   /** impact → stamp, in seconds */
   stampAfterImpact: 0.3,
-  /** impact → mood sting, in seconds */
-  stingAfterImpact: 0.7,
   /** pulled lever: lever_clack → bell */
   bellAfterLever: 0.28,
   /** not pulled: air_brake → brake_squeal */
@@ -50,7 +49,7 @@ export const TIMING = {
   gainPress: 0.7,
   gainSwitch: 0.6,
   gainPaper: 0.55,
-  gainHover: 0.18,
+  gainHover: 0.45,
   gainLeverClack: 0.9,
   gainBell: 0.5,
   gainAirBrake: 0.55,
@@ -59,7 +58,6 @@ export const TIMING = {
   gainImpact: 1,
   gainComicCrash: 0.85,
   gainStamp: 0.95,
-  gainSting: 0.45,
   /** ambience bus level (the buffer itself is mastered to -26 LUFS) */
   ambienceLevel: 0.5,
   /** ducked ambience levels */
@@ -114,13 +112,10 @@ const FALLBACK_SLICES: SpriteMap = {
   crash_comic: [11210, 1200],
   stamp_1: [12510, 400],
   stamp_2: [13010, 400],
-  sting_relief: [13510, 1500],
-  sting_dread: [15110, 1500],
-  sting_absurd: [16710, 1500],
 };
 
 /** Sounds whose pitch must not be randomised (they carry harmony). */
-const TONAL = new Set(['bell', 'drone', 'sting_relief', 'sting_dread', 'sting_absurd']);
+const TONAL = new Set(['bell', 'drone']);
 
 /** Names that exist as `_1.._n` variants. */
 const VARIANT_GROUPS: Record<string, number> = {
@@ -143,9 +138,15 @@ interface Engine {
   ctx: Ctx;
   master: GainNode;
   limiter: DynamicsCompressorNode;
+  /** shared effects bus (every cue, plus the rumble) */
   sfxBus: GainNode;
+  /** effects slider — separate from the ambience slider */
+  sfxUserGain: GainNode;
   ambienceBus: GainNode;
+  /** automation only: ducking. Never mixed with the user slider. */
   ambienceDuck: GainNode;
+  /** background slider */
+  ambienceUserGain: GainNode;
   rumbleBus: GainNode;
   sfxBuffer: AudioBuffer | null;
   ambienceBuffer: AudioBuffer | null;
@@ -163,10 +164,22 @@ interface SfxPayload {
   sprite: SpriteMap | null;
 }
 
+const DEFAULT_VOLUME = 0.7;
+
 let soundEnabled = true;
-let volume = 0.7;
+let ambienceEnabled = true;
+let sfxEnabled = true;
+let ambienceVolume = DEFAULT_VOLUME;
+let sfxVolume = DEFAULT_VOLUME;
+let prefsLoaded = false;
+
 const STORAGE_SOUND = 'tramvay_sound_enabled';
-const STORAGE_VOLUME = 'tramvay_volume';
+const STORAGE_AMBIENCE_ENABLED = 'tramvay_ambience_enabled';
+const STORAGE_AMBIENCE_VOLUME = 'tramvay_ambience_volume';
+const STORAGE_SFX_ENABLED = 'tramvay_sfx_enabled';
+const STORAGE_SFX_VOLUME = 'tramvay_sfx_volume';
+/** the single pre-split volume; read once as the initial value, then ignored */
+const STORAGE_LEGACY_VOLUME = 'tramvay_volume';
 
 /** at most one warning per missing/failed item */
 const warned = new Set<string>();
@@ -181,71 +194,171 @@ function warnOnce(key: string, message: string): void {
 }
 
 /* ------------------------------------------------------------------ *
- * Preferences
+ * Preferences — every read and write is guarded, so a blocked
+ * localStorage (private mode, third-party cookie rules) never throws
  * ------------------------------------------------------------------ */
 
-export const getSoundEnabled = (): boolean => {
-  if (typeof window === 'undefined') return soundEnabled;
+function readItem(key: string): string | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const saved = window.localStorage.getItem(STORAGE_SOUND);
-    if (saved !== null) soundEnabled = saved === 'true';
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeItem(key: string, value: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
   } catch {
     /* ignore */
   }
+}
+
+function parseBool(raw: string | null, fallback: boolean): boolean {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return fallback;
+}
+
+/** 0..1, or null when the stored value is missing or not a finite number */
+function parseVolume(raw: string | null): number | null {
+  if (raw === null || raw.trim() === '') return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(1, Math.max(0, parsed));
+}
+
+const clampVolume = (value: number): number => {
+  if (!Number.isFinite(value)) return DEFAULT_VOLUME;
+  return Math.min(1, Math.max(0, value));
+};
+
+/**
+ * Read every preference once. The old single `tramvay_volume` seeds both new
+ * sliders when the new keys are missing; it is never read again afterwards.
+ */
+function loadPrefs(): void {
+  if (prefsLoaded) return;
+  prefsLoaded = true;
+  if (typeof window === 'undefined') return;
+  soundEnabled = parseBool(readItem(STORAGE_SOUND), true);
+  ambienceEnabled = parseBool(readItem(STORAGE_AMBIENCE_ENABLED), true);
+  sfxEnabled = parseBool(readItem(STORAGE_SFX_ENABLED), true);
+  const legacy = parseVolume(readItem(STORAGE_LEGACY_VOLUME));
+  ambienceVolume = parseVolume(readItem(STORAGE_AMBIENCE_VOLUME)) ?? legacy ?? DEFAULT_VOLUME;
+  sfxVolume = parseVolume(readItem(STORAGE_SFX_VOLUME)) ?? legacy ?? DEFAULT_VOLUME;
+}
+
+/** Smoothed gain move (≈`seconds` to settle) so sliders never zipper. */
+function rampGain(param: AudioParam, value: number, seconds: number, immediate = false): void {
+  try {
+    const now = engine ? engine.ctx.currentTime : 0;
+    param.cancelScheduledValues(now);
+    if (immediate) {
+      param.setValueAtTime(value, now);
+      return;
+    }
+    param.setTargetAtTime(value, now, Math.max(0.004, seconds / 3));
+  } catch {
+    /* ignore */
+  }
+}
+
+export const getSoundEnabled = (): boolean => {
+  loadPrefs();
   return soundEnabled;
 };
 
+export const getAmbienceEnabled = (): boolean => {
+  loadPrefs();
+  return ambienceEnabled;
+};
+
+export const getSfxEnabled = (): boolean => {
+  loadPrefs();
+  return sfxEnabled;
+};
+
+export const getAmbienceVolume = (): number => {
+  loadPrefs();
+  return ambienceVolume;
+};
+
+export const getSfxVolume = (): number => {
+  loadPrefs();
+  return sfxVolume;
+};
+
+/** Master mute: everything, ambience included. */
 export const setSoundEnabled = (enabled: boolean): void => {
+  loadPrefs();
   soundEnabled = enabled;
-  try {
-    window.localStorage.setItem(STORAGE_SOUND, enabled ? 'true' : 'false');
-  } catch {
-    /* ignore */
-  }
+  writeItem(STORAGE_SOUND, enabled ? 'true' : 'false');
   if (!engine) return;
-  try {
-    const now = engine.ctx.currentTime;
-    engine.master.gain.cancelScheduledValues(now);
-    engine.master.gain.setTargetAtTime(enabled ? volume : 0, now, 0.08);
-    if (!enabled) {
-      stopAllCues();
-    } else {
-      startAmbience();
-    }
-  } catch {
-    /* ignore */
+  rampGain(engine.master.gain, enabled ? 1 : 0, 0.08);
+  if (!enabled) {
+    stopAllCues();
+  } else if (ambienceEnabled) {
+    startAmbience();
   }
 };
 
-export const getVolume = (): number => {
-  if (typeof window === 'undefined') return volume;
-  try {
-    const saved = window.localStorage.getItem(STORAGE_VOLUME);
-    if (saved !== null) {
-      const parsed = Number(saved);
-      if (Number.isFinite(parsed)) volume = Math.min(1, Math.max(0, parsed));
-    }
-  } catch {
-    /* ignore */
-  }
-  return volume;
+/**
+ * Background on/off. Fades the ambience over ~150 ms and touches nothing on the
+ * effects bus. The source keeps running at gain 0 so unmuting is instant.
+ */
+export const setAmbienceEnabled = (enabled: boolean): void => {
+  loadPrefs();
+  ambienceEnabled = enabled;
+  writeItem(STORAGE_AMBIENCE_ENABLED, enabled ? 'true' : 'false');
+  if (!engine) return;
+  rampGain(engine.ambienceUserGain.gain, enabled ? ambienceVolume : 0, 0.15);
+  if (enabled) startAmbience();
 };
 
+export const setAmbienceVolume = (next: number): void => {
+  loadPrefs();
+  ambienceVolume = clampVolume(next);
+  writeItem(STORAGE_AMBIENCE_VOLUME, String(ambienceVolume));
+  if (!engine) return;
+  rampGain(engine.ambienceUserGain.gain, ambienceEnabled ? ambienceVolume : 0, 0.06);
+};
+
+/**
+ * Effects on/off. Fades out and stops every effect voice (including the
+ * approach rumble) and blocks new ones. The ambience is untouched.
+ */
+export const setSfxEnabled = (enabled: boolean): void => {
+  loadPrefs();
+  sfxEnabled = enabled;
+  writeItem(STORAGE_SFX_ENABLED, enabled ? 'true' : 'false');
+  if (!engine) return;
+  // unmuting is immediate so the confirmation tick is not swallowed by a ramp
+  rampGain(engine.sfxUserGain.gain, enabled ? sfxVolume : 0, 0.06, enabled);
+  if (!enabled) {
+    fadeVoices(0.1, () => true);
+    stopRumble(0.1);
+  }
+};
+
+export const setSfxVolume = (next: number): void => {
+  loadPrefs();
+  sfxVolume = clampVolume(next);
+  writeItem(STORAGE_SFX_VOLUME, String(sfxVolume));
+  if (!engine) return;
+  rampGain(engine.sfxUserGain.gain, sfxEnabled ? sfxVolume : 0, 0.06);
+};
+
+/* ---- legacy single-volume API, kept for older call sites ---- */
+
+export const getVolume = (): number => getSfxVolume();
+
+/** Legacy master volume: sets both sliders. */
 export const setVolume = (next: number): void => {
-  volume = Math.min(1, Math.max(0, Number.isFinite(next) ? next : 0.7));
-  try {
-    window.localStorage.setItem(STORAGE_VOLUME, String(volume));
-  } catch {
-    /* ignore */
-  }
-  if (!engine) return;
-  try {
-    const now = engine.ctx.currentTime;
-    engine.master.gain.cancelScheduledValues(now);
-    engine.master.gain.setTargetAtTime(soundEnabled ? volume : 0, now, 0.06);
-  } catch {
-    /* ignore */
-  }
+  setAmbienceVolume(next);
+  setSfxVolume(next);
 };
 
 /* ------------------------------------------------------------------ *
@@ -380,8 +493,9 @@ async function decode(ctx: Ctx, bytes: ArrayBuffer, key: string): Promise<AudioB
 }
 
 function buildGraph(ctx: Ctx): Engine {
+  // master is now a pure mute (1 or 0); the two user sliders carry the level
   const master = ctx.createGain();
-  master.gain.value = soundEnabled ? volume : 0;
+  master.gain.value = soundEnabled ? 1 : 0;
 
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -3;
@@ -393,28 +507,39 @@ function buildGraph(ctx: Ctx): Engine {
 
   master.connect(limiter);
 
+  // effects: sfxBus -> sfxUserGain -> master
   const sfxBus = ctx.createGain();
   sfxBus.gain.value = 0.9;
-  sfxBus.connect(master);
+  const sfxUserGain = ctx.createGain();
+  sfxUserGain.gain.value = sfxEnabled ? sfxVolume : 0;
+  sfxBus.connect(sfxUserGain);
+  sfxUserGain.connect(master);
 
+  // background: ambienceBus -> duck -> ambienceUserGain -> master
   const ambienceBus = ctx.createGain();
   ambienceBus.gain.value = 0;
   const ambienceDuck = ctx.createGain();
   ambienceDuck.gain.value = 1;
+  const ambienceUserGain = ctx.createGain();
+  ambienceUserGain.gain.value = ambienceEnabled ? ambienceVolume : 0;
   ambienceBus.connect(ambienceDuck);
-  ambienceDuck.connect(master);
+  ambienceDuck.connect(ambienceUserGain);
+  ambienceUserGain.connect(master);
 
+  // the rumble is an effect: it rides the effects bus (and its mute)
   const rumbleBus = ctx.createGain();
-  rumbleBus.gain.value = 0;
-  rumbleBus.connect(master);
+  rumbleBus.gain.value = 1;
+  rumbleBus.connect(sfxBus);
 
   return {
     ctx,
     master,
     limiter,
     sfxBus,
+    sfxUserGain,
     ambienceBus,
     ambienceDuck,
+    ambienceUserGain,
     rumbleBus,
     sfxBuffer: null,
     ambienceBuffer: null,
@@ -435,8 +560,7 @@ export const unlockAudio = (): Promise<void> => {
     const ctx = createContext();
     if (!ctx) return;
 
-    getSoundEnabled();
-    getVolume();
+    loadPrefs();
     const created = buildGraph(ctx);
     engine = created;
 
@@ -476,6 +600,8 @@ export const unlockAudio = (): Promise<void> => {
       created.sfxBuffer = null;
     }
 
+    if (created.sfxBuffer) flushQueuedPress();
+
     startAmbience();
     void pendingAmbience?.then(async (ambBytes) => {
       if (!ambBytes || !engine || engine !== created) return;
@@ -497,10 +623,12 @@ export const unlockAudio = (): Promise<void> => {
 
 let ambienceSource: AudioBufferSourceNode | null = null;
 let ambienceTimer: ReturnType<typeof setTimeout> | null = null;
+/** the bed only runs once the game has started (never on the landing page) */
+let ambienceArmed = false;
 
 function startAmbience(): void {
   if (!engine || !engine.ambienceBuffer) return;
-  if (!soundEnabled) return;
+  if (!soundEnabled || !ambienceEnabled || !ambienceArmed) return;
   const { ctx, ambienceBus, ambienceBuffer } = engine;
   try {
     if (ambienceSource) {
@@ -539,6 +667,12 @@ function restoreAmbience(seconds = 2): void {
   duckAmbience(1, seconds);
 }
 
+/** Arm the ambience bed. Called inside the Start gesture. */
+export const armAmbience = (): void => {
+  ambienceArmed = true;
+  startAmbience();
+};
+
 /* ------------------------------------------------------------------ *
  * Slice playback
  * ------------------------------------------------------------------ */
@@ -548,6 +682,11 @@ interface ActiveVoice {
   gain: GainNode;
   tag: string;
 }
+
+/** The outcome group: impact/crash + the ink stamp. Nothing else is tagged. */
+const OUTCOME_IMPACT = 'outcome-impact';
+const OUTCOME_STAMP = 'outcome-stamp';
+const OUTCOME_TAGS: ReadonlySet<string> = new Set([OUTCOME_IMPACT, OUTCOME_STAMP]);
 
 const activeVoices = new Set<ActiveVoice>();
 const lastVariant = new Map<string, string>();
@@ -587,7 +726,7 @@ function playSprite(
   name: string,
   { gain = 1, rate = 1, tag = name, when = 0 }: { gain?: number; rate?: number; tag?: string; when?: number } = {},
 ): void {
-  if (!engine || !soundEnabled) return;
+  if (!engine || !soundEnabled || !sfxEnabled) return;
   const { ctx, sfxBuffer, sprite, sfxBus } = engine;
   if (!sfxBuffer || !sfxBuffer.getChannelData) return;
 
@@ -641,6 +780,43 @@ function playSprite(
 /** ±4 % playback-rate jitter, never applied to tonal material. */
 const jitterRate = (): number => 0.96 + Math.random() * 0.08;
 
+/**
+ * Fade the matching voices out over `seconds` and stop them. The ambience is
+ * not a voice, so it can never be caught by this.
+ */
+function fadeVoices(seconds: number, which: (tag: string) => boolean): void {
+  if (!engine) return;
+  const fade = Math.max(0.02, seconds);
+  for (const voice of Array.from(activeVoices)) {
+    if (!which(voice.tag)) continue;
+    activeVoices.delete(voice);
+    try {
+      const now = engine.ctx.currentTime;
+      const param = voice.gain.gain;
+      if (typeof param.cancelAndHoldAtTime === 'function') {
+        param.cancelAndHoldAtTime(now);
+      } else {
+        const current = param.value;
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(Math.max(0.0001, current), now);
+      }
+      param.linearRampToValueAtTime(0.0001, now + fade);
+      voice.source.stop(now + fade + 0.02);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Fade out anything from the outcome group (impact / comic crash / stamp) that
+ * is still ringing. Called when the player advances, restarts, or commits a new
+ * decision, so a 1.2 s comic crash cannot bleed into the next dilemma.
+ */
+export const fadeOutOutcome = (seconds = 0.1): void => {
+  fadeVoices(seconds, (tag) => OUTCOME_TAGS.has(tag));
+};
+
 /* ------------------------------------------------------------------ *
  * Rumble (approach) — looped brown noise + sweeping lowpass
  * ------------------------------------------------------------------ */
@@ -683,7 +859,7 @@ function rumbleBuffer(ctx: Ctx): AudioBuffer {
 }
 
 function scheduleClacks(state: RumbleState): void {
-  if (state.stopped || !engine) return;
+  if (state.stopped || !engine || !sfxEnabled || !soundEnabled) return;
   const progress = Math.min(1, 1 - state.interval / TIMING.clackStartInterval);
   playSprite('clack', { gain: 0.25 + progress * 0.45, rate: jitterRate(), tag: 'rumble-clack' });
   state.interval = Math.max(TIMING.clackMinInterval, state.interval * TIMING.clackIntervalFactor);
@@ -691,7 +867,7 @@ function scheduleClacks(state: RumbleState): void {
 }
 
 function startRumble(seconds: number): void {
-  if (!engine || !soundEnabled) return;
+  if (!engine || !soundEnabled || !sfxEnabled) return;
   const { ctx, rumbleBus } = engine;
   const duration = Math.max(0.4, seconds);
   try {
@@ -760,8 +936,38 @@ function stopRumble(fade = 0.12): void {
  * Public cue API
  * ------------------------------------------------------------------ */
 
-export const playPress = (): void => {
+/**
+ * The Start click usually lands before the sprite has finished decoding (the
+ * first tap is what creates the AudioContext). Rather than swallow it, remember
+ * it and play it on decode — but only if it is still fresh (≤ 1 s late).
+ */
+let queuedPressAt: number | null = null;
+const PRESS_QUEUE_TTL_MS = 1000;
+
+const nowMs = (): number =>
+  typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+
+function firePress(): void {
   playSprite('press', { gain: TIMING.gainPress, rate: jitterRate() });
+}
+
+function flushQueuedPress(): void {
+  const at = queuedPressAt;
+  queuedPressAt = null;
+  if (at === null) return;
+  if (nowMs() - at > PRESS_QUEUE_TTL_MS) return;
+  firePress();
+}
+
+export const playPress = (): void => {
+  if (!engine || !engine.sfxBuffer) {
+    queuedPressAt = nowMs();
+    return;
+  }
+  queuedPressAt = null;
+  firePress();
 };
 
 export const playSwitch = (): void => {
@@ -770,6 +976,11 @@ export const playSwitch = (): void => {
 
 export const playPaper = (): void => {
   playSprite('paper', { gain: TIMING.gainPaper, rate: jitterRate() });
+};
+
+/** One quiet tick for the settings preview; no pointer-type gate. */
+export const playLevelTick = (): void => {
+  playSprite('hover', { gain: TIMING.gainHover, rate: jitterRate() });
 };
 
 export const playHoverTick = (): void => {
@@ -798,56 +1009,57 @@ export const playDecision = (pulled: boolean, approachSec: number): void => {
 };
 
 export interface ImpactOptions {
-  mood?: 'relief' | 'dread' | 'absurd';
   comic?: boolean;
 }
 
 /**
- * Impact → stamp → mood sting. Returns the milliseconds from "impact" (which is
- * when the tram animation ends) until the stamp lands, so the UI can reveal the
- * verdict exactly on the ink stamp.
+ * Outcome sequence: rumble and clacks cut dead → 80 ms of silence → impact
+ * (`crash_comic` on the comic dilemmas) → stamp at +300 ms → ambience eased back
+ * to its normal level over ~2 s starting right after the stamp.
+ *
+ * Returns the milliseconds from "impact" (which is when the tram animation
+ * ends) until the stamp lands, so the UI can reveal the verdict exactly on the
+ * ink stamp.
  */
-export const playImpact = ({ mood = 'dread', comic = false }: ImpactOptions = {}): number => {
-  stopRumble(0.06);
+export const playImpact = ({ comic = false }: ImpactOptions = {}): number => {
+  // cut the approach dead so the silence beat is a real hole
+  stopRumble(0.03);
   clearTimers();
-  // silence beat: duck almost to zero so the impact lands in a hole
   duckAmbience(TIMING.duckSilence, 0.15);
 
   const beatMs = Math.round(TIMING.silenceBeat * 1000);
   const stampMs = Math.round(TIMING.stampAfterImpact * 1000);
-  const stingMs = Math.round(TIMING.stingAfterImpact * 1000);
 
   later(() => {
     if (comic) {
-      playSprite('crash_comic', { gain: TIMING.gainComicCrash, rate: jitterRate() });
+      playSprite('crash_comic', { gain: TIMING.gainComicCrash, rate: jitterRate(), tag: OUTCOME_IMPACT });
     } else {
-      playSprite('impact_muffled', { gain: TIMING.gainImpact, rate: jitterRate() });
+      playSprite('impact_muffled', { gain: TIMING.gainImpact, rate: jitterRate(), tag: OUTCOME_IMPACT });
     }
     duckAmbience(TIMING.duckDecision * 0.85, 0.25);
   }, beatMs);
-  later(() => playSprite('stamp', { gain: TIMING.gainStamp, rate: jitterRate() }), beatMs + stampMs);
+
   later(() => {
-    playSprite(`sting_${mood}`, { gain: TIMING.gainSting });
-    restoreAmbience(2.5);
-  }, beatMs + stingMs);
+    playSprite('stamp', { gain: TIMING.gainStamp, rate: jitterRate(), tag: OUTCOME_STAMP });
+    // the bed comes back to its normal level starting right after the stamp
+    restoreAmbience(2);
+  }, beatMs + stampMs);
+
   // safety net: never leave the ambience ducked
-  later(() => restoreAmbience(2), beatMs + stingMs + 2500);
+  later(() => restoreAmbience(2), beatMs + stampMs + 2500);
 
   return IMPACT_TO_STAMP_MS;
 };
 
-/** Stop every scheduled cue, kill voices and restore the bed. */
+/**
+ * Stop every scheduled cue and fade every voice out over ~100 ms (a hard cut
+ * clicks), then restore the bed. Cues started after this call are unaffected,
+ * which is what lets restart play its page-turn.
+ */
 export const stopAllCues = (): void => {
   clearTimers();
   stopRumble(0.08);
-  for (const voice of Array.from(activeVoices)) {
-    try {
-      voice.source.stop();
-    } catch {
-      /* ignore */
-    }
-    activeVoices.delete(voice);
-  }
+  fadeVoices(0.1, () => true);
   restoreAmbience(1.2);
 };
 
@@ -855,10 +1067,10 @@ export const stopAllCues = (): void => {
  * Legacy aliases — kept so older call sites keep working
  * ------------------------------------------------------------------ */
 
-/** The stamp and the mood sting replace the old reveal chime. */
+/** The stamp replaces the old reveal chime. */
 export const playRevealChime = (): void => {};
 
-/** The stamp and the mood sting replace the old foil sweep. */
+/** The stamp replaces the old foil sweep. */
 export const playFoilSweep = (): void => {};
 
 export const startMusicBed = (): void => {
@@ -903,12 +1115,11 @@ export const playLowThump = (): void => {
   playSprite('impact_muffled', { gain: 0.55, rate: jitterRate() });
 };
 export const playChordSwell = (): void => {
-  playSprite('sting_relief', { gain: 0.4 });
+  playSprite('drone', { gain: 0.4 });
 };
-/** Summary payoff: stamp, then a relief sting. */
+/** Summary payoff: the single stamp. */
 export const playSummaryReveal = (): void => {
-  playSprite('stamp', { gain: 0.9, rate: jitterRate() });
-  later(() => playSprite('sting_relief', { gain: 0.4 }), 320);
+  playSprite('stamp', { gain: 0.9, rate: jitterRate(), tag: OUTCOME_STAMP });
 };
 
 /* ------------------------------------------------------------------ *

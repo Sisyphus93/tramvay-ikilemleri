@@ -1,0 +1,200 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
+import {
+  getAmbienceEnabled,
+  getAmbienceVolume,
+  getSfxEnabled,
+  getSfxVolume,
+  setAmbienceEnabled,
+  setAmbienceVolume,
+  setSfxEnabled,
+  setSfxVolume,
+  playLevelTick,
+  unlockAudio,
+} from '../utils/audio.ts';
+
+/**
+ * The one audio control that is not the master mute: a compact popover with a
+ * row each for the background bed and the effects. It overlays the page (it
+ * must not move anything in the one-screen layout) and every value it shows is
+ * read back from the engine, so it is correct after a reopen and a reload.
+ */
+
+interface RowProps {
+  label: string;
+  enabled: boolean;
+  volume: number;
+  onToggle: (next: boolean) => void;
+  onVolume: (next: number) => void;
+  /** fired once, on release, so a drag does not machine-gun the preview */
+  onCommit?: () => void;
+}
+
+const percentOf = (volume: number): number => Math.round(volume * 100);
+
+const Row: React.FC<RowProps> = ({ label, enabled, volume, onToggle, onVolume, onCommit }) => {
+  const pct = percentOf(volume);
+  return (
+    <div className="audio-settings__row">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={`${label} sesi`}
+        title={enabled ? `${label}: açık` : `${label}: kapalı`}
+        onClick={() => onToggle(!enabled)}
+        className={`audio-settings__switch ${enabled ? 'audio-settings__switch--on' : ''}`}
+      >
+        <span className="audio-settings__knob" aria-hidden="true" />
+      </button>
+
+      <span className="audio-settings__label">{label}</span>
+
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={pct}
+        aria-label={`${label} düzeyi`}
+        aria-valuetext={`${pct}%`}
+        onChange={(event) => onVolume(Number(event.target.value) / 100)}
+        onPointerUp={onCommit}
+        onKeyUp={onCommit}
+        onBlur={onCommit}
+        className="audio-settings__slider"
+      />
+
+      <span className="audio-settings__pct numeral">{pct}%</span>
+    </div>
+  );
+};
+
+export const AudioSettings: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  const [ambienceEnabled, setAmbience] = useState<boolean>(() => getAmbienceEnabled());
+  const [ambienceVolume, setAmbienceLevel] = useState<number>(() => getAmbienceVolume());
+  const [sfxEnabled, setEffects] = useState<boolean>(() => getSfxEnabled());
+  const [sfxVolume, setEffectsLevel] = useState<number>(() => getSfxVolume());
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  /** re-read the engine state every time it opens (M / other tabs may have moved it) */
+  const openPanel = useCallback(() => {
+    setAmbience(getAmbienceEnabled());
+    setAmbienceLevel(getAmbienceVolume());
+    setEffects(getSfxEnabled());
+    setEffectsLevel(getSfxVolume());
+    setOpen(true);
+  }, []);
+
+  const close = useCallback((refocus: boolean) => {
+    setOpen(false);
+    if (refocus) triggerRef.current?.focus();
+  }, []);
+
+  // outside click + Escape
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: Event) => {
+      const root = rootRef.current;
+      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      close(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        close(true);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open, close]);
+
+  // first control gets focus when the popover opens
+  useEffect(() => {
+    if (!open) return;
+    const first = panelRef.current?.querySelector<HTMLElement>('button, input');
+    first?.focus();
+  }, [open]);
+
+  const toggleAmbience = useCallback((next: boolean) => {
+    // the first gesture is also what is allowed to create the AudioContext
+    void unlockAudio();
+    setAmbience(next);
+    setAmbienceEnabled(next);
+  }, []);
+
+  const toggleEffects = useCallback((next: boolean) => {
+    void unlockAudio();
+    setEffects(next);
+    setSfxEnabled(next);
+    // a tick, but only when switching effects *on* and they are enabled
+    if (next) playLevelTick();
+  }, []);
+
+  const changeAmbienceLevel = useCallback((next: number) => {
+    setAmbienceLevel(next);
+    setAmbienceVolume(next);
+  }, []);
+
+  const changeEffectsLevel = useCallback((next: number) => {
+    setEffectsLevel(next);
+    setSfxVolume(next);
+  }, []);
+
+  return (
+    <div className="audio-settings" ref={rootRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        data-hover-sound
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls="audio-settings-panel"
+        aria-label="Ses ayarları"
+        title="Ses ayarları"
+        onClick={() => (open ? close(false) : openPanel())}
+        className={`pill-button ${open ? 'pill-button--on' : ''}`}
+      >
+        <SlidersHorizontal className="w-3.5 h-3.5" strokeWidth={2.4} />
+      </button>
+
+      {open && (
+        <div
+          id="audio-settings-panel"
+          ref={panelRef}
+          role="dialog"
+          aria-label="Ses ayarları"
+          className="audio-settings__panel"
+        >
+          <Row
+            label="Arka plan"
+            enabled={ambienceEnabled}
+            volume={ambienceVolume}
+            onToggle={toggleAmbience}
+            onVolume={changeAmbienceLevel}
+          />
+          <Row
+            label="Efektler"
+            enabled={sfxEnabled}
+            volume={sfxVolume}
+            onToggle={toggleEffects}
+            onVolume={changeEffectsLevel}
+            onCommit={playLevelTick}
+          />
+        </div>
+      )}
+    </div>
+  );
+};

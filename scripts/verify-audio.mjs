@@ -20,6 +20,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { phoneLevelDb } from './audio-metrics.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -269,9 +270,6 @@ const REQUIRED = [
   'crash_comic',
   'stamp_1',
   'stamp_2',
-  'sting_relief',
-  'sting_dread',
-  'sting_absurd',
 ];
 
 const TRANSIENTS = ['press', 'hover_1', 'switch_1', 'switch_2', 'clack_1', 'lever_clack_1', 'stamp_1', 'stamp_2'];
@@ -319,10 +317,12 @@ function main() {
 
   // 2..4 per-sound numeric checks
   const monoByName = {};
+  const phoneDbByName = {};
   for (const name of REQUIRED) {
     const wav = readWav(join(RAW_DIR, `${name}.wav`));
     const x = wav.channels[0];
     monoByName[name] = x;
+    phoneDbByName[name] = phoneLevelDb(x);
     const p = db(peakOf(x));
     const r = db(rmsOf(x));
     const dc = dcOf(x);
@@ -375,9 +375,75 @@ function main() {
     record('bell', 'fundamental > -40 dB after 600 ms', `${relDb.toFixed(1)} dB`, relDb > -40);
   }
 
+  // The low body has to survive, but the cues that were inaudible on a phone
+  // have to put real energy above 500 Hz, which is where a small speaker lives.
   for (const name of ['stamp_1', 'stamp_2', 'impact_muffled_1', 'impact_muffled_2']) {
-    const c = spectralCentroid(monoByName[name]);
-    record(name, 'centroid < 800 Hz', `${c.toFixed(0)} Hz`, c < 800);
+    const high = bandEnergyFraction(monoByName[name], 500, 10000);
+    record(name, 'energy above 500 Hz >= 35 %', `${(high * 100).toFixed(0)} %`, high >= 0.35);
+    const low = bandEnergyFraction(monoByName[name], 20, 200);
+    record(name, 'low body still there (< 200 Hz)', `${(low * 100).toFixed(0)} %`, low >= 0.08);
+  }
+
+  {
+    const c = spectralCentroid(monoByName.press);
+    record('press', 'centroid > 1500 Hz', `${c.toFixed(0)} Hz`, c > 1500);
+    const t = attackTime(monoByName.press);
+    record('press', 'attack <= 10 ms', `${(t * 1000).toFixed(1)} ms`, t <= 0.01);
+    const high = bandEnergyFraction(monoByName.press, 2000, 4000);
+    record('press', '2–4 kHz transient energy', `${(high * 100).toFixed(0)} %`, high >= 0.15);
+  }
+
+  /* ---- phone-weighted loudness targets ---- */
+  // T is the level lever_clack had before the phone pass (−22.6 dBFS on this
+  // metric) minus 4 dB: the whole pack moves 4 dB down against the untouched
+  // ambience bed, and everything audible-on-a-phone converges on T.
+  const PHONE_T = -26.6;
+  const PHONE_PRIMARY = [
+    'press',
+    'switch_1',
+    'switch_2',
+    'lever_clack_1',
+    'lever_clack_2',
+    'stamp_1',
+    'stamp_2',
+    'impact_muffled_1',
+    'impact_muffled_2',
+    'crash_comic',
+    'bell',
+    'paper_1',
+    'paper_2',
+    'paper_3',
+    'air_brake',
+    'brake_squeal',
+  ];
+  const PHONE_TICKS = ['hover_1', 'hover_2', 'hover_3', 'clack_1', 'clack_2', 'clack_3'];
+  for (const name of PHONE_PRIMARY) {
+    const v = phoneDbByName[name];
+    record(name, `phone ${PHONE_T.toFixed(1)} ± 2 dB`, `${v.toFixed(2)}`, Math.abs(v - PHONE_T) <= 2);
+  }
+  for (const name of PHONE_TICKS) {
+    const v = phoneDbByName[name];
+    const target = PHONE_T - 6;
+    record(name, `phone ${target.toFixed(1)} ± 2 dB`, `${v.toFixed(2)}`, Math.abs(v - target) <= 2);
+  }
+  {
+    const v = phoneDbByName.drone;
+    const target = PHONE_T - 8;
+    record('drone', `phone ${target.toFixed(1)} ± 3 dB`, `${v.toFixed(2)}`, Math.abs(v - target) <= 3);
+  }
+
+  /* ---- peaks: −6 dBFS ceiling, −3 dBFS for the stamp/impact group ---- */
+  for (const name of REQUIRED) {
+    const ceiling = /^(stamp|impact_muffled|crash_comic)/.test(name) ? -3 : -6;
+    const p = db(peakOf(monoByName[name]));
+    record(name, `peak <= ${ceiling} dBFS`, p.toFixed(2), p <= ceiling + 0.05);
+  }
+
+  /* ---- the stings are gone, everywhere ---- */
+  if (!Object.keys(map).some((k) => k.startsWith('sting'))) {
+    record('pack', 'no sting audio in the sprite', 'none', true);
+  } else {
+    record('pack', 'no sting audio in the sprite', Object.keys(map).filter((k) => k.startsWith('sting')).join(','), false);
   }
 
   for (const name of ['air_brake', 'paper_1', 'paper_2', 'paper_3']) {
@@ -385,9 +451,9 @@ function main() {
     record(name, 'centroid > 2000 Hz', `${c.toFixed(0)} Hz`, c > 2000);
   }
 
-  for (const name of ['drone', 'sting_dread']) {
-    const f = bandEnergyFraction(monoByName[name], 20, 500);
-    record(name, 'energy below 500 Hz', `${(f * 100).toFixed(0)} %`, f > 0.5);
+  {
+    const f = bandEnergyFraction(monoByName.drone, 20, 500);
+    record('drone', 'energy below 500 Hz', `${(f * 100).toFixed(0)} %`, f > 0.5);
   }
 
   for (const [base, count] of Object.entries(VARIANTS)) {
@@ -446,6 +512,17 @@ function main() {
     record('ambience', 'DC offset', dcOf(x).toFixed(6), Math.abs(dcOf(x)) < 1e-3);
   } else {
     record('ambience', 'file present', 'MISSING', false);
+  }
+
+  /* ---- phone-weighted loudness table ---- */
+  if (process.env.PHONE_TABLE !== '0') {
+    const rows = REQUIRED.map((n) => [n, phoneDbByName[n]]);
+    const w = Math.max(...rows.map(([n]) => n.length));
+    console.log('\nphone-weighted level (400 Hz–10 kHz HP/LP, RMS of the active part)');
+    console.log('-'.repeat(w + 12));
+    for (const [n, v] of rows) {
+      console.log(`${n.padEnd(w)}  ${(Number.isFinite(v) ? v.toFixed(2) : '-inf').padStart(7)} dBFS`);
+    }
   }
 
   /* ---- print table ---- */
