@@ -73,6 +73,8 @@ export interface Dilemma {
   divertedCommentary: string;
   chatReaction: string;
   twitchEmote: string;
+  mood?: 'relief' | 'dread' | 'absurd';
+  comic?: boolean;
 }
 
 export type Decision = 'straight' | 'diverted';

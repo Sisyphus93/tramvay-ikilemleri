@@ -16,14 +16,15 @@ import { TitleScreen } from './components/TitleScreen.tsx';
 import {
   getSoundEnabled,
   setSoundEnabled,
-  startMusicBed,
-  playSonicSignatureMotif,
-  playPremiumTransition,
-  playLeverSnap,
-  playDecisionWhoosh,
-  playRevealChime,
+  preloadAudio,
+  unlockAudio,
+  playPress,
+  playSwitch,
+  playPaper,
+  playDecision,
+  playImpact,
+  stopAllCues,
   playHoverTick,
-  playSoftTick,
 } from './utils/audio.ts';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
@@ -82,19 +83,15 @@ export default function App() {
   const [history, setHistory] = useState<PlayerHistoryEntry[]>([]);
   const [soundEnabled, setSoundState] = useState<boolean>(() => getSoundEnabled());
   const lastHoverRef = useRef(0);
+  const verdictHandledRef = useRef(false);
+  const verdictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    const startOnFirstGesture = () => {
-      if (getSoundEnabled()) startMusicBed();
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
-    window.addEventListener('pointerdown', startOnFirstGesture);
-    window.addEventListener('keydown', startOnFirstGesture);
+    preloadAudio();
     return () => {
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
+      if (verdictTimerRef.current) clearTimeout(verdictTimerRef.current);
+      stopAllCues();
     };
   }, []);
 
@@ -115,25 +112,22 @@ export default function App() {
     const next = !soundEnabled;
     setSoundState(next);
     setSoundEnabled(next);
-    playSoftTick(next ? 1 : 0);
+    if (next) playSwitch();
   }, [soundEnabled]);
 
   const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
 
   const handleStart = useCallback(() => {
-    startMusicBed();
-    playSonicSignatureMotif();
-    playPremiumTransition();
+    // unlockAudio creates/resumes the context synchronously within this user gesture.
+    void unlockAudio().then(() => playPress());
     setGameState('PLAYING');
   }, []);
 
   const handleLeverToggle = useCallback(() => {
     if (isAnimating || showResult) return;
-    setLeverPulled((prev) => {
-      playLeverSnap();
-      return !prev;
-    });
-  }, [isAnimating, showResult]);
+    setLeverPulled(!leverPulled);
+    playSwitch();
+  }, [isAnimating, showResult, leverPulled]);
 
   const handleMakeDecision = useCallback(
     (dec: Decision) => {
@@ -141,13 +135,14 @@ export default function App() {
 
       if (dec === 'diverted' && !leverPulled) {
         setLeverPulled(true);
-        playLeverSnap();
+        playSwitch();
       } else if (dec === 'straight' && leverPulled) {
         setLeverPulled(false);
-        playLeverSnap();
+        playSwitch();
       }
 
-      playDecisionWhoosh();
+      verdictHandledRef.current = false;
+      playDecision(dec === 'diverted', window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.42 : 1.65);
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
@@ -156,29 +151,32 @@ export default function App() {
   );
 
   const handleAnimationEnd = useCallback(() => {
-    setIsAnimating(false);
-    setShowResult(true);
-    playRevealChime();
-
-    const chosenTrack =
-      decision === 'diverted'
-        ? currentDilemma.divertedTrack
-        : currentDilemma.straightTrack;
-
+    if (verdictHandledRef.current || !decision) return;
+    verdictHandledRef.current = true;
+    const chosenTrack = decision === 'diverted' ? currentDilemma.divertedTrack : currentDilemma.straightTrack;
     const entry: PlayerHistoryEntry = {
       dilemmaId: currentDilemma.id,
-      decision: decision || 'straight',
+      decision,
       leverPulled: decision === 'diverted',
       victimsLabel: chosenTrack.label,
       humanDeaths: chosenTrack.isHuman ? chosenTrack.count : 0,
       materialDamageTL: chosenTrack.monetaryValueTL || 0,
     };
-
-    setHistory((prev) => [...prev, entry]);
+    const mood = currentDilemma.mood ?? (chosenTrack.isHuman ? 'dread' : 'absurd');
+    const msUntilStamp = playImpact({ mood, comic: currentDilemma.comic });
+    verdictTimerRef.current = setTimeout(() => {
+      verdictTimerRef.current = null;
+      setIsAnimating(false);
+      setShowResult(true);
+      setHistory((prev) => prev.some((item) => item.dilemmaId === entry.dilemmaId) ? prev : [...prev, entry]);
+    }, msUntilStamp);
   }, [decision, currentDilemma]);
 
   const handleNextDilemma = useCallback(() => {
-    playPremiumTransition();
+    if (verdictTimerRef.current) clearTimeout(verdictTimerRef.current);
+    verdictTimerRef.current = null;
+    verdictHandledRef.current = false;
+    playPaper();
     if (currentStep < DILEMMAS.length - 1) {
       setCurrentStep((prev) => prev + 1);
       setDecision(null);
@@ -193,7 +191,11 @@ export default function App() {
   }, [currentStep]);
 
   const handleRestart = useCallback(() => {
-    playPremiumTransition();
+    if (verdictTimerRef.current) clearTimeout(verdictTimerRef.current);
+    verdictTimerRef.current = null;
+    verdictHandledRef.current = false;
+    stopAllCues();
+    playPaper();
     setCurrentStep(0);
     setDecision(null);
     setLeverPulled(false);
@@ -213,7 +215,7 @@ export default function App() {
       const next = route === 'diverted';
       if (next === leverPulled) return;
       setLeverPulled(next);
-      playLeverSnap();
+      playSwitch();
     },
     [isAnimating, showResult, leverPulled]
   );

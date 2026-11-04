@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { PlayerHistoryEntry } from '../types.ts';
 import { DILEMMAS } from '../data/dilemmas.ts';
@@ -32,9 +32,12 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const revealPlayed = useRef(false);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (revealPlayed.current) return;
+    revealPlayed.current = true;
     playSummaryReveal();
   }, []);
 

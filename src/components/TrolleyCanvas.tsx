@@ -5,7 +5,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Dilemma, Decision, TrackTarget, TrackEntityType } from '../types.ts';
-import { playRisingSweep, playLowThump } from '../utils/audio.ts';
 
 interface TrolleyCanvasProps {
   dilemma: Dilemma;
@@ -104,13 +103,14 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 }) => {
   const [tramProgress, setTramProgress] = useState<number>(0);
   const [impactHappened, setImpactHappened] = useState(false);
+  const impactRef = useRef(false);
   const animRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isAnimating && decision) {
-      setImpactHappened(false);
       setTramProgress(0);
-      playRisingSweep();
+      setImpactHappened(false);
+      impactRef.current = false;
 
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
@@ -122,10 +122,9 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
         const elapsed = now - startTime;
         const p = Math.min(1, elapsed / duration);
         setTramProgress(easeInOutCubic(p));
-
-        if (p >= 0.9 && !impactHappened) {
+        if (p >= 0.9 && !impactRef.current) {
+          impactRef.current = true;
           setImpactHappened(true);
-          playLowThump();
         }
 
         if (p < 1) {
@@ -143,6 +142,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 
     setTramProgress(0);
     setImpactHappened(false);
+    impactRef.current = false;
   }, [isAnimating, decision, onAnimationEnd]);
 
   const tramPosition = (p: number, path: Decision) => {
