@@ -15,7 +15,6 @@ import {
   Award,
   ChevronDown,
   ChevronUp,
-  ShieldCheck,
 } from 'lucide-react';
 
 interface SummaryScreenProps {
@@ -30,7 +29,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   onRestart,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -100,7 +99,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const handleCopy = () => {
     playSoftTick(1);
-    const text = `🚋 ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM 🚋\nUnvanım: ${archetype.title} (${archetype.badge})\n💀 Toplam Zayiat: ${totalDeaths} Can Kaybı\n⚡ Makas Tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
+    const text = `ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM\nUnvanım: ${archetype.title} (${archetype.badge})\nToplam zayiat: ${totalDeaths} can kaybı\nMakas tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
 
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -127,15 +126,8 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
       className="report w-full"
     >
       <motion.div variants={item} className="report__head">
-        <div className="q__topline" style={{ marginBottom: 12 }}>
-          <span className="poster__kicker-tag">Rapor · 27 / 27</span>
-          <span className="micro-label">Ahlaki sicil</span>
-        </div>
-        <h1 className="report__title">
-          Felsefeyi
-          <br />
-          çözdün<span style={{ color: 'var(--red)' }}>!</span>
-        </h1>
+        <p className="report__meta">Kayıt tamamlandı · {DILEMMAS.length} ikilem</p>
+        <h1 className="report__title">Ahlaki sicil raporu</h1>
         <p className="report__lede">
           <span className="numeral">{DILEMMAS.length}</span> absürt ikilemin ardından makas kolu
           artık senin adına bir şeyler söylüyor. İşte kararlarının toplumsal ve ahlaki bilançosu.
@@ -149,9 +141,6 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         transition={reduceMotion ? { duration: 0 } : { duration: 0.8, ease: EASE }}
         className="archetype"
       >
-        <span className="archetype__mark" aria-hidden="true">
-          No. 27 / Sicil
-        </span>
         <span className="archetype__badge">
           <Award className="w-3 h-3" strokeWidth={2.5} />
           <span>{archetype.badge}</span>
@@ -209,7 +198,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         </button>
 
         {showDetails && (
-          <div>
+          <div className="ledger__list">
             {history.map((h, idx) => {
               const dilemma = DILEMMAS.find((d) => d.id === h.dilemmaId);
               if (!dilemma) return null;
@@ -221,19 +210,17 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
                 <div key={idx} className="ledger__row">
                   <div>
                     <div className="ledger__name">
-                      {String(idx + 1).padStart(2, '0')} · {dilemma.conceptualChoice ? 'KAVRAMSAL' : 'MAKAS'}
+                      {dilemma.title.replace(/^\s*\d+\.\s*İkilem:\s*/i, '')}
                     </div>
                     <div className="ledger__choice">
-                      {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
+                      {idx + 1} / {DILEMMAS.length} · {dilemma.conceptualChoice ? 'Kavramsal seçim' : 'Makas kararı'} · {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
                     </div>
                   </div>
                   <div className="ledger__outcome">
-                    <span className="ledger__save">
-                      <ShieldCheck className="w-3 h-3" strokeWidth={2.6} />
-                      {savedTarget.label}
+                    <span className="ledger__save">Kurtarılan: {savedTarget.label}</span>
+                    <span className={h.humanDeaths > 0 ? 'ledger__lose ledger__lose--cost' : 'ledger__lose'}>
+                      {dilemma.conceptualChoice ? 'Sonuç' : 'Feda edilen'}: {lostTarget.label}
                     </span>
-                    <span style={{ color: 'var(--ink-faint)' }}>→</span>
-                    <span className="ledger__lose">{lostTarget.label}</span>
                   </div>
                 </div>
               );
@@ -243,7 +230,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
       </motion.div>
 
       <motion.div variants={item} className="report__actions">
-        <button onClick={handleCopy} data-hover-sound className="btn btn--primary">
+        <button onClick={handleCopy} data-hover-sound className="btn">
           {copied ? (
             <Check className="w-3.5 h-3.5" strokeWidth={3} />
           ) : (
@@ -258,7 +245,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
             onRestart();
           }}
           data-hover-sound
-          className="btn"
+          className="btn btn--secondary"
         >
           <RotateCcw className="w-3.5 h-3.5" strokeWidth={2.5} />
           <span>Yeniden oyna</span>

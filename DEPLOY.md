@@ -31,7 +31,6 @@ in the Render dashboard rather than hard-coding an old branch here.
 ## Notes
 
 - `package-lock.json` is committed, so `npm ci` gives a reproducible build.
-- If you later add server-side Gemini API calls (see `metadata.json`), you will
-  need a **Web Service** (Node/Express) instead of a static site, and set the
-  `GEMINI_API_KEY` environment variable in the Render dashboard
-  (**Environment** tab) — never commit real keys to the repo.
+- The app is entirely client-side: it needs no environment variables, no API
+  keys and no server process. All 27 dilemmas, audio and state live in the
+  browser bundle.

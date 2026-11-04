@@ -77,7 +77,7 @@ const easeInOutCubic = (p: number) =>
 
 /* Scene geometry (viewBox 880 × 420) */
 const VIEW_W = 880;
-const VIEW_H = 420;
+const VIEW_H = 340;
 const RAIL_Y = 215;
 const JUNCTION_X = 310;
 const STRAIGHT_Y = 132;
@@ -89,17 +89,11 @@ const PLATE_W = 136;
 const PLATE_H = 76;
 
 const INK = '#171512';
-const RED = '#d4452b';
-const TEAL = '#2e7d6e';
-const BLUE = '#2c5f8a';
-const OCHRE = '#c98a2e';
-const PAPER = '#f2e9d8';
-const CARD = '#fbf4e4';
-
-const clamp = (label: string, max = 20) =>
-  label.toLocaleUpperCase('tr-TR').length > max
-    ? `${label.toLocaleUpperCase('tr-TR').slice(0, max - 1).trimEnd()}…`
-    : label.toLocaleUpperCase('tr-TR');
+const RED = '#a82a22';
+const TEAL = '#1f6b5c';
+const NEUTRAL = '#4f4b45';
+const PAPER = '#ffffff';
+const CARD = '#f8f8f7';
 
 export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   dilemma,
@@ -191,7 +185,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             width={PLATE_W}
             height={PLATE_H}
             rx="5"
-            fill={isHit ? '#f7dcd2' : CARD}
+            fill={CARD}
             stroke={INK}
             strokeWidth="3"
           />
@@ -223,16 +217,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 
           {meta.kind === 'object' && (
             <g>
-              <rect x="-45" y="-13" width="26" height="26" rx="2" fill="rgba(44,95,138,.12)" stroke={BLUE} strokeWidth="1.8" />
-              <text
-                x="-32"
-                y="3.5"
-                textAnchor="middle"
-                fill={BLUE}
-                style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 8.5, fontWeight: 600 }}
-              >
-                {meta.code}
-              </text>
+              <rect x="-45" y="-13" width="26" height="26" rx="2" fill="rgba(23,21,18,.06)" stroke={INK} strokeWidth="1.8" />
             </g>
           )}
 
@@ -240,19 +225,19 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             <g transform="translate(-32, 1)">
               <path
                 d="M -14 9 Q -14 -4 -8 -8 L -10 -16 L -2.5 -10.5 Q 0 -11 2.5 -10.5 L 10 -16 L 8 -8 Q 14 -4 14 9 Z"
-                fill="rgba(201,138,46,.2)"
-                stroke={OCHRE}
+                fill="rgba(23,21,18,.08)"
+                stroke={NEUTRAL}
                 strokeWidth="2"
                 strokeLinejoin="round"
               />
-              <path d="M -14 9 Q 0 15 14 9" fill="none" stroke={OCHRE} strokeWidth="2" />
+              <path d="M -14 9 Q 0 15 14 9" fill="none" stroke={NEUTRAL} strokeWidth="2" />
             </g>
           )}
 
           {meta.kind === 'abstract' && (
             <g transform="translate(-32, 0)">
-              <circle cx="0" cy="0" r="13" fill="none" stroke={BLUE} strokeWidth="1.8" opacity="0.7" />
-              <path d="M 0 -17 L 6 -11 L 0 -5 L -6 -11 Z" fill="rgba(44,95,138,.22)" stroke={BLUE} strokeWidth="1.8" />
+              <circle cx="0" cy="0" r="13" fill="none" stroke={INK} strokeWidth="1.8" opacity="0.7" />
+              <path d="M 0 -17 L 6 -11 L 0 -5 L -6 -11 Z" fill="rgba(23,21,18,.08)" stroke={INK} strokeWidth="1.8" />
             </g>
           )}
 
@@ -263,51 +248,29 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             textAnchor="middle"
             fill={INK}
             style={{
-              fontFamily: '"IBM Plex Mono", monospace',
-              fontSize: target.count > 99 ? 19 : 24,
-              fontWeight: 600,
+              fontFamily: 'Archivo, sans-serif',
+              fontSize: target.count > 99 ? 22 : 27,
+              fontWeight: 700,
               letterSpacing: '-0.03em',
             }}
           >
             ×{target.count}
           </text>
-          <text
-            x="34"
-            y="20"
-            textAnchor="middle"
-            fill="#6f6555"
-            style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 8, letterSpacing: '0.16em' }}
-          >
-            {target.count === 1 ? 'HEDEF' : 'CANLI'}
-          </text>
 
           {isHit && (
-            <g opacity="0.85" stroke="#a8321d" strokeWidth="4" strokeLinecap="round">
+            <g opacity="0.85" stroke={RED} strokeWidth="4" strokeLinecap="round">
               <line x1="-52" y1="-20" x2="-12" y2="20" />
               <line x1="-12" y1="-20" x2="-52" y2="20" />
             </g>
           )}
         </g>
 
-        {/* plate caption */}
-        <text
-          x="0"
-          y={PLATE_H / 2 + 21}
-          textAnchor="middle"
-          fill={isHit ? '#a8321d' : '#4a4238'}
-          stroke={PAPER}
-          strokeWidth="5"
-          strokeLinejoin="round"
-          style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 11, letterSpacing: '0.1em', fontWeight: 600 }}
-        >
-          {clamp(target.label)}
-        </text>
       </g>
     );
   };
 
   const branchRail = (active: boolean) => ({
-    stroke: active ? INK : '#c3b49c',
+    stroke: active ? INK : '#bdbcb7',
     strokeWidth: active ? 5 : 4,
     transition: 'stroke .45s ease, stroke-width .45s ease',
   });
@@ -335,27 +298,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
         <rect width={VIEW_W} height={VIEW_H} fill="url(#paperDots)" />
 
         <g clipPath="url(#boardClip)">
-          {/* Ghost plan number */}
-          <text
-            x={VIEW_W / 2}
-            y={VIEW_H - 4}
-            textAnchor="middle"
-            fill={INK}
-            opacity="0.05"
-            style={{ fontFamily: 'Archivo, sans-serif', fontSize: 168, fontWeight: 900, letterSpacing: '-0.05em' }}
-          >
-            {String(dilemma.id).padStart(2, '0')}
-          </text>
-
-          {/* Diagram header */}
-          <line x1="0" y1="56" x2={VIEW_W} y2="56" stroke={INK} strokeWidth="1.4" opacity="0.16" />
-          <text x="20" y="39" fill="#6f6555" style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em' }}>
-            MAKAS ŞEMASI · PLAN {String(dilemma.id).padStart(2, '0')}
-          </text>
-          <text x={VIEW_W - 20} y="39" textAnchor="end" fill="#6f6555" style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em' }}>
-            {dilemma.conceptualChoice ? 'KAVRAMSAL SEÇİM' : 'FİZİKSEL YÖN'}
-          </text>
-
+          <g transform="translate(0, -46)">
           {/* Approach */}
           <g>
             <line x1="18" y1={RAIL_Y - 12} x2={JUNCTION_X} y2={RAIL_Y - 12} stroke={INK} strokeWidth="5" strokeLinecap="round" />
@@ -367,7 +310,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
                 y1={RAIL_Y - 19}
                 x2={40 + i * 46}
                 y2={RAIL_Y + 19}
-                stroke="#a2937c"
+                stroke="#bdbcb7"
                 strokeWidth="2.4"
                 strokeLinecap="round"
               />
@@ -467,34 +410,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
               <circle cx="-4" cy="-63" r="3.5" fill={PAPER} opacity="0.7" />
             </g>
             <circle cx="0" cy="6" r="7" fill={PAPER} stroke={INK} strokeWidth="3" />
-            <text
-              x="58"
-              y="10"
-              fill="#4a4238"
-              style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 10.5, letterSpacing: '0.12em', fontWeight: 600 }}
-            >
-              MAKAS KOLU
-            </text>
-            <text
-              x="58"
-              y="26"
-              fill="#6f6555"
-              style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 9.5, letterSpacing: '0.1em' }}
-            >
-              {isAnimating ? 'HAREKET HALİNDE' : leverPulled ? 'MAKAS HATTI AÇIK' : 'DÜZ HAT AÇIK'}
-            </text>
           </g>
-
-          <text
-            x={VIEW_W - 22}
-            y={VIEW_H - 14}
-            textAnchor="end"
-            fill="#6f6555"
-            opacity="0.85"
-            style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 9.5, letterSpacing: '0.14em' }}
-          >
-            ÖLÇEK 1:1 · REV. {String(dilemma.id).padStart(2, '0')}
-          </text>
 
           {/* Tram */}
           <g transform={`translate(${tramPos.x}, ${tramPos.y}) rotate(${tramPos.angle})`} className="blueprint-tram">
@@ -527,13 +443,13 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             <rect x="-70" y="6" width="140" height="13" fill={PAPER} stroke={INK} strokeWidth="2" />
 
             {/* Windows */}
-            <rect x="8" y="-23" width="54" height="25" rx="3" fill="#f6eeda" stroke={INK} strokeWidth="2.6" />
+            <rect x="8" y="-23" width="54" height="25" rx="3" fill={PAPER} stroke={INK} strokeWidth="2.6" />
             <rect x="-64" y="-23" width="30" height="25" rx="3" fill="#f6eeda" stroke={INK} strokeWidth="2.6" />
             <rect x="-28" y="-23" width="30" height="25" rx="3" fill="#f6eeda" stroke={INK} strokeWidth="2.6" />
 
             {/* Headlight + beam */}
-            <path d="M 74 -6 L 112 -20 L 112 12 L 74 6 Z" fill="#ffe9b8" opacity="0.26" />
-            <circle cx="66" cy="-2" r="6" fill="#ffe9b8" stroke={INK} strokeWidth="2.2" />
+            <path d="M 74 -6 L 112 -20 L 112 12 L 74 6 Z" fill="#ffffff" opacity="0.24" />
+            <circle cx="66" cy="-2" r="6" fill={PAPER} stroke={INK} strokeWidth="2.2" />
 
             {/* Route badge */}
             <rect x="-62" y="21" width="38" height="14" rx="2" fill={INK} />
@@ -542,7 +458,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
               y="32"
               textAnchor="middle"
               fill={PAPER}
-              style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 9, fontWeight: 600 }}
+              style={{ fontFamily: 'Archivo, sans-serif', fontSize: 13, fontWeight: 700 }}
             >
               27
             </text>
@@ -552,6 +468,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             <circle cx="38" cy="33" r="9" fill={INK} />
             <circle cx="-38" cy="33" r="3.4" fill={PAPER} />
             <circle cx="38" cy="33" r="3.4" fill={PAPER} />
+          </g>
           </g>
         </g>
       </svg>

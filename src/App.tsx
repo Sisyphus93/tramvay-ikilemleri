@@ -264,9 +264,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="spotlight-layer" aria-hidden="true" />
-      <div className="paper-grain-overlay" aria-hidden="true" />
-
       <TrolleyHeader
         currentStep={currentStep}
         totalSteps={DILEMMAS.length}
@@ -290,42 +287,39 @@ export default function App() {
               <motion.div key="playing" {...screenMotion} className="w-full">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div key={currentStep} {...stepMotion} className="w-full">
-                    <section className="q">
+                    <section className={`q ${showResult ? 'q--result' : ''}`}>
                       <div className="q__topline">
                         <span className="q__step">
-                          İkilem{' '}
-                          <b className="numeral">
-                            {String(currentStep + 1).padStart(2, '0')}
-                          </b>
-                          <span style={{ color: 'var(--ink-faint)' }}>
-                            / {DILEMMAS.length}
-                          </span>
+                          İkilem <b className="numeral">{currentStep + 1}</b> / {DILEMMAS.length}
                         </span>
-                        <span className="q__chapter">{chapterTitle}</span>
                       </div>
 
                       <h1 className="q__title" aria-live="polite">
-                        {setup && <span className="q__setup">{setup} </span>}
-                        <span className="q__ask">{ask}</span>
+                        {chapterTitle}
                       </h1>
 
-                      {currentDilemma.conceptualChoice && (
-                        <p className="q__note">
-                          <span aria-hidden="true" style={{ color: 'var(--ochre)' }}>
-                            ●
-                          </span>
-                          <span>
-                            Sahne seçimleri sembolik olarak gösterir; sonuçlar yukarıdaki
-                            senaryoya göredir.
-                          </span>
-                        </p>
+                      {!showResult && (
+                        <>
+                          <p className="q__statement" aria-live="polite">
+                            {setup && <span className="q__setup">{setup} </span>}
+                            <span className="q__ask">{ask}</span>
+                          </p>
+
+                          {currentDilemma.conceptualChoice && (
+                            <p className="q__note">
+                              Sahne seçimleri sembolik olarak gösterir; sonuçlar yukarıdaki
+                              senaryoya göredir.
+                            </p>
+                          )}
+                        </>
                       )}
                     </section>
 
+                    {!showResult && (
                     <div className="board">
                       <div className="board__head">
                         <span>
-                          <span className="board__id">Plan {String(currentStep + 1).padStart(2, '0')}</span>
+                          <span className="board__id">Plan {currentStep + 1}</span>
                           {' · '}Makas Şeması
                         </span>
                         <span className="board__hint">[Boşluk] makası çevir</span>
@@ -402,6 +396,7 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+                    )}
 
                     <AnimatePresence mode="wait" initial={false}>
                       {!showResult ? (
@@ -414,7 +409,7 @@ export default function App() {
                           />
                         </motion.div>
                       ) : (
-                        <motion.div key="result" {...controlMotion} className="w-full">
+                        <motion.div key="result" {...controlMotion} className="w-full" aria-live="polite">
                           <ResultOverlay
                             dilemma={currentDilemma}
                             decision={decision || 'straight'}
@@ -449,7 +444,7 @@ export default function App() {
               <span className="kbd">2</span> makas
             </span>
             <span className="legend-item">
-              <span className="kbd">␣</span> kolu çek
+              <span className="kbd">Boşluk</span> kolu çek
             </span>
             <span className="legend-item">
               <span className="kbd">M</span> ses

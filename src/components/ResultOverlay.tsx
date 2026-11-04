@@ -113,7 +113,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
           <span className="verdict__next-hint">
             Enter ile ilerle
           </span>
-          <button onClick={onNext} className="btn btn--primary btn--lg">
+          <button onClick={onNext} className="btn btn--lg">
             <span>{isLast ? 'Ahlaki sicil karnesi' : 'Sonraki ikilem'}</span>
             <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
           </button>
