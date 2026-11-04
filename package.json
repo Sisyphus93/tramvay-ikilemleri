@@ -8,7 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "audio:build": "node scripts/generate-audio.mjs",
+    "audio:build:force": "node scripts/generate-audio.mjs --force",
+    "audio:verify": "node scripts/verify-audio.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

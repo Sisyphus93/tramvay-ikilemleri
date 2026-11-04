@@ -1,0 +1,113 @@
+{
+  "generatedBy": "scripts/generate-audio.mjs (procedural, no third-party material)",
+  "sampleRate": 32000,
+  "formats": [
+    "wav"
+  ],
+  "sprite": {
+    "press": [
+      0,
+      150
+    ],
+    "hover_1": [
+      250,
+      50
+    ],
+    "hover_2": [
+      400,
+      50
+    ],
+    "hover_3": [
+      550,
+      50
+    ],
+    "switch_1": [
+      700,
+      120
+    ],
+    "switch_2": [
+      920,
+      120
+    ],
+    "paper_1": [
+      1140,
+      460
+    ],
+    "paper_2": [
+      1700,
+      520
+    ],
+    "paper_3": [
+      2320,
+      580
+    ],
+    "lever_clack_1": [
+      3000,
+      500
+    ],
+    "lever_clack_2": [
+      3600,
+      500
+    ],
+    "bell": [
+      4200,
+      1200
+    ],
+    "air_brake": [
+      5500,
+      800
+    ],
+    "brake_squeal": [
+      6400,
+      600
+    ],
+    "drone": [
+      7100,
+      2000
+    ],
+    "clack_1": [
+      9200,
+      120
+    ],
+    "clack_2": [
+      9420,
+      120
+    ],
+    "clack_3": [
+      9640,
+      120
+    ],
+    "impact_muffled_1": [
+      9860,
+      600
+    ],
+    "impact_muffled_2": [
+      10560,
+      600
+    ],
+    "crash_comic": [
+      11260,
+      1200
+    ],
+    "stamp_1": [
+      12560,
+      400
+    ],
+    "stamp_2": [
+      13060,
+      400
+    ],
+    "sting_relief": [
+      13560,
+      1500
+    ],
+    "sting_dread": [
+      15160,
+      1500
+    ],
+    "sting_absurd": [
+      16760,
+      1500
+    ]
+  }
+}
