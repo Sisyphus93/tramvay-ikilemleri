@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { DILEMMAS } from './data/dilemmas.ts';
-import { Decision, PlayerHistoryEntry } from './types.ts';
+import { Decision, DilemmaMood, PlayerHistoryEntry } from './types.ts';
 import { TrolleyHeader } from './components/TrolleyHeader.tsx';
 import { TrolleyCanvas } from './components/TrolleyCanvas.tsx';
 import { TrolleyControls } from './components/TrolleyControls.tsx';
@@ -16,14 +16,15 @@ import { TitleScreen } from './components/TitleScreen.tsx';
 import {
   getSoundEnabled,
   setSoundEnabled,
-  startMusicBed,
-  playSonicSignatureMotif,
-  playPremiumTransition,
-  playLeverSnap,
-  playDecisionWhoosh,
-  playRevealChime,
+  preloadAudio,
+  unlockAudio,
+  playPress,
+  playSwitch,
+  playPaper,
   playHoverTick,
-  playSoftTick,
+  playDecision,
+  playImpact,
+  stopAllCues,
 } from './utils/audio.ts';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
@@ -82,21 +83,29 @@ export default function App() {
   const [history, setHistory] = useState<PlayerHistoryEntry[]>([]);
   const [soundEnabled, setSoundState] = useState<boolean>(() => getSoundEnabled());
   const lastHoverRef = useRef(0);
+  const resultTimerRef = useRef<number | null>(null);
+  const animationEndHandledRef = useRef(false);
   const reduceMotion = useReducedMotion();
 
+  /** Real animation length from TrolleyCanvas: 1.65 s, 0.42 s reduced motion. */
+  const approachSeconds = reduceMotion ? 0.42 : 1.65;
+
+  // Only bytes are prefetched here: no AudioContext may exist before the
+  // player actually starts the game (browser autoplay policy).
   useEffect(() => {
-    const startOnFirstGesture = () => {
-      if (getSoundEnabled()) startMusicBed();
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
-    window.addEventListener('pointerdown', startOnFirstGesture);
-    window.addEventListener('keydown', startOnFirstGesture);
-    return () => {
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
+    void preloadAudio();
   }, []);
+
+  // A queued result must not fire after unmount.
+  useEffect(
+    () => () => {
+      if (resultTimerRef.current !== null) {
+        window.clearTimeout(resultTimerRef.current);
+        resultTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const onOver = (e: MouseEvent) => {
@@ -115,70 +124,94 @@ export default function App() {
     const next = !soundEnabled;
     setSoundState(next);
     setSoundEnabled(next);
-    playSoftTick(next ? 1 : 0);
+    // Only the "on" direction needs feedback; muting is its own proof.
+    if (next) playSwitch();
   }, [soundEnabled]);
 
   const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
 
   const handleStart = useCallback(() => {
-    startMusicBed();
-    playSonicSignatureMotif();
-    playPremiumTransition();
+    // Called synchronously from the click / Enter / Space handler, so the
+    // AudioContext is created inside the gesture.
+    void unlockAudio();
+    playPress();
     setGameState('PLAYING');
   }, []);
 
   const handleLeverToggle = useCallback(() => {
     if (isAnimating || showResult) return;
-    setLeverPulled((prev) => {
-      playLeverSnap();
-      return !prev;
-    });
+    // Sound lives outside the updater: StrictMode runs updaters twice.
+    setLeverPulled((prev) => !prev);
+    playSwitch();
   }, [isAnimating, showResult]);
 
   const handleMakeDecision = useCallback(
     (dec: Decision) => {
       if (isAnimating || showResult) return;
 
-      if (dec === 'diverted' && !leverPulled) {
-        setLeverPulled(true);
-        playLeverSnap();
-      } else if (dec === 'straight' && leverPulled) {
-        setLeverPulled(false);
-        playLeverSnap();
-      }
+      const nextLever = dec === 'diverted';
+      if (nextLever !== leverPulled) setLeverPulled(nextLever);
 
-      playDecisionWhoosh();
+      animationEndHandledRef.current = false;
+      // The rumble rises for exactly as long as the trolley actually runs.
+      playDecision(nextLever, approachSeconds);
+
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
     },
-    [isAnimating, showResult, leverPulled]
+    [isAnimating, showResult, leverPulled, approachSeconds]
   );
 
   const handleAnimationEnd = useCallback(() => {
-    setIsAnimating(false);
-    setShowResult(true);
-    playRevealChime();
+    // The canvas can report the end of the run more than once; the verdict must
+    // only be committed once (otherwise: double history entry, double impact).
+    if (animationEndHandledRef.current) return;
+    if (!decision) return;
+    animationEndHandledRef.current = true;
 
     const chosenTrack =
       decision === 'diverted'
         ? currentDilemma.divertedTrack
         : currentDilemma.straightTrack;
 
+    const mood: DilemmaMood =
+      currentDilemma.mood ?? (chosenTrack.isHuman ? 'dread' : 'absurd');
+
+    // Impact -> silence beat -> ink stamp -> sting, scheduled on the audio clock.
+    const msUntilStamp = playImpact({ mood, comic: currentDilemma.comic === true });
+
     const entry: PlayerHistoryEntry = {
       dilemmaId: currentDilemma.id,
-      decision: decision || 'straight',
+      decision,
       leverPulled: decision === 'diverted',
       victimsLabel: chosenTrack.label,
       humanDeaths: chosenTrack.isHuman ? chosenTrack.count : 0,
       materialDamageTL: chosenTrack.monetaryValueTL || 0,
     };
 
-    setHistory((prev) => [...prev, entry]);
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    // Controls stay locked (isAnimating is still true) until the stamp lands.
+    resultTimerRef.current = window.setTimeout(() => {
+      resultTimerRef.current = null;
+      setIsAnimating(false);
+      setShowResult(true);
+      setHistory((prev) =>
+        prev.some((item) => item.dilemmaId === entry.dilemmaId) ? prev : [...prev, entry]
+      );
+    }, Math.max(0, msUntilStamp));
   }, [decision, currentDilemma]);
 
   const handleNextDilemma = useCallback(() => {
-    playPremiumTransition();
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    animationEndHandledRef.current = false;
+    playPaper();
     if (currentStep < DILEMMAS.length - 1) {
       setCurrentStep((prev) => prev + 1);
       setDecision(null);
@@ -193,7 +226,13 @@ export default function App() {
   }, [currentStep]);
 
   const handleRestart = useCallback(() => {
-    playPremiumTransition();
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    animationEndHandledRef.current = false;
+    stopAllCues();
+    playPaper();
     setCurrentStep(0);
     setDecision(null);
     setLeverPulled(false);
@@ -213,7 +252,7 @@ export default function App() {
       const next = route === 'diverted';
       if (next === leverPulled) return;
       setLeverPulled(next);
-      playLeverSnap();
+      playSwitch();
     },
     [isAnimating, showResult, leverPulled]
   );

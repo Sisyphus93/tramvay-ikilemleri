@@ -60,9 +60,15 @@ export interface TrackTarget {
   monetaryValueTL?: number;
 }
 
+export type DilemmaMood = 'relief' | 'dread' | 'absurd';
+
 export interface Dilemma {
   id: number;
   conceptualChoice?: boolean;
+  /** Which verdict sting the impact resolves into. Defaults from the victim type. */
+  mood?: DilemmaMood;
+  /** Opt into the exaggerated cartoon crash + comic timing (rare on purpose). */
+  comic?: boolean;
   title: string;
   question: string;
   straightTrack: TrackTarget;

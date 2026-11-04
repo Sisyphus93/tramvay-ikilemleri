@@ -12,7 +12,8 @@
     "audio:generate": "node scripts/generate-audio.mjs",
     "audio:repackage": "node scripts/generate-audio.mjs --repackage",
     "audio:build": "node scripts/generate-audio.mjs && node scripts/verify-audio.mjs",
-    "audio:verify": "node scripts/verify-audio.mjs"
+    "audio:verify": "node scripts/verify-audio.mjs",
+    "audio:smoke": "tsx scripts/smoke-audio.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

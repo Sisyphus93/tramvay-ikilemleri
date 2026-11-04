@@ -65,6 +65,15 @@ npm run audio:generate  # sadece üret
 npm run audio:verify    # sadece sayısal doğrulama
 ```
 
+```bash
+npm run audio:smoke     # çalışma zamanı duman testi (sahte Web Audio grafiği)
+```
+
+`npm run audio:smoke` gerçek `src/utils/audio.ts` modülünü sahte bir Web Audio
+grafiğiyle çalıştırır: jest öncesi `AudioContext` oluşturulmadığını, her ipucunun
+doğru sprite dilimine gittiğini, stamp'in 380 ms sonra geldiğini ve eksik/HTML
+olarak dönen dosyalarda sessizliğe düşüldüğünü doğrular.
+
 `npm run audio:build` çıktısı `audio-src/raw/` (44.1 kHz) ve `public/audio/`
 (32 kHz) klasörlerine yazılır; ikisi de depoya işlenir, böylece deploy sırasında
 `ffmpeg` ya da render gerekmez.
