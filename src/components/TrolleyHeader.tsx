@@ -48,8 +48,8 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
             <span className="meter">
               İkilem
               <span className="meter__value numeral">
-                {String(currentStep + 1).padStart(2, '0')}
-                <span style={{ color: '#c3b49c', fontWeight: 400 }}> / {totalSteps}</span>
+                {currentStep + 1}
+                <span style={{ color: 'var(--muted)', fontWeight: 400 }}> / {totalSteps}</span>
               </span>
             </span>
             <span className="meter__divider" />
