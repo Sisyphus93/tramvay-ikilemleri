@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { DILEMMAS } from './data/dilemmas.ts';
-import { Decision, PlayerHistoryEntry, DilemmaMood } from './types.ts';
+import { Decision, PlayerHistoryEntry } from './types.ts';
 import { TrolleyHeader } from './components/TrolleyHeader.tsx';
 import { TrolleyCanvas } from './components/TrolleyCanvas.tsx';
 import { TrolleyControls } from './components/TrolleyControls.tsx';
@@ -24,7 +24,9 @@ import {
   playHoverTick,
   playDecision,
   playImpact,
+  fadeOutOutcome,
   stopAllCues,
+  armAmbience,
 } from './utils/audio.ts';
 import { getTramAnimationSeconds } from './components/TrolleyCanvas.tsx';
 
@@ -137,6 +139,8 @@ export default function App() {
   const handleStart = useCallback(() => {
     // Synchronous inside the gesture: this is the only place an AudioContext is born.
     void unlockAudio();
+    // the ambience bed only runs during the game
+    armAmbience();
     playPress();
     setGameState('PLAYING');
   }, []);
@@ -160,6 +164,8 @@ export default function App() {
 
       clearRevealTimer();
       verdictGuardRef.current = false;
+      // a still-ringing impact or stamp from the previous round dies here
+      fadeOutOutcome();
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
@@ -184,9 +190,7 @@ export default function App() {
         ? currentDilemma.divertedTrack
         : currentDilemma.straightTrack;
 
-    const mood: DilemmaMood =
-      currentDilemma.mood ?? (chosenTrack.isHuman ? 'dread' : 'absurd');
-    const msUntilStamp = playImpact({ mood, comic: currentDilemma.comic === true });
+    const msUntilStamp = playImpact({ comic: currentDilemma.comic === true });
 
     const entry: PlayerHistoryEntry = {
       dilemmaId: currentDilemma.id,
@@ -215,6 +219,8 @@ export default function App() {
   const handleNextDilemma = useCallback(() => {
     clearRevealTimer();
     verdictGuardRef.current = false;
+    // never let a long comic crash (1.2 s) bleed into the next dilemma
+    fadeOutOutcome();
     if (currentStep < DILEMMAS.length - 1) {
       setCurrentStep((prev) => prev + 1);
       setDecision(null);
@@ -229,10 +235,13 @@ export default function App() {
   }, [currentStep, clearRevealTimer]);
 
   const handleRestart = useCallback(() => {
-    playPaper();
     clearRevealTimer();
     verdictGuardRef.current = false;
+    // sweep first, then play the page-turn: it used to be stopped an instant
+    // after it started, so restart was silent
+    fadeOutOutcome();
     stopAllCues();
+    playPaper();
     setCurrentStep(0);
     setDecision(null);
     setLeverPulled(false);
@@ -259,6 +268,12 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // focus inside the audio-settings popover: arrows/space adjust the
+      // sliders and toggles, they must not play the game. M stays global.
+      const origin = e.target as Element | null;
+      const isMuteKey = e.key === 'm' || e.key === 'M';
+      if (!isMuteKey && origin?.closest?.('.audio-settings')) return;
+
       if (e.key === 'm' || e.key === 'M') {
         toggleSound();
       } else if (gameState === 'TITLE' && (e.key === 'Enter' || e.key === ' ')) {

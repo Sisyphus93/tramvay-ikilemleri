@@ -26,13 +26,16 @@ cross-correlating it against the raw render; every shipped file has a lag of
 
 ## Sound list
 
-44.1 kHz mono, 16-bit source in `audio-src/raw/`. SFX peak at −6 dBFS
-(`stamp_*`, `impact_muffled_*`, `crash_comic` at −3 dBFS). Ambience sits at
-−26 LUFS integrated, true peak below −3 dBTP.
+44.1 kHz mono, 16-bit source in `audio-src/raw/`. Peak ceilings are −6 dBFS
+(−3 dBFS for `stamp_*`, `impact_muffled_*`, `crash_comic`); every slice is then
+trimmed once, by a single scale factor, to its phone-weighted target (see
+below), so the actual peaks sit at or under those ceilings. Nothing is
+compressed or limited at render time. Ambience sits at −26 LUFS integrated,
+true peak below −3 dBTP.
 
 | Name | Length | Character |
 |---|---|---|
-| `press` | 0.15 s | muted mechanical button: 5 ms noise click + damped 120 Hz body |
+| `press` | 0.15 s | mechanical button click that survives a phone: 2–4 kHz noise transient + short 300–800 Hz body |
 | `hover_1..3` | 0.05 s | 2–3 ms highpassed tick with a faint 2–3 kHz resonance, dry |
 | `switch_1..2` | 0.12 s | "tk-clack", two micro clicks 25–40 ms apart |
 | `paper_1..3` | 0.4–0.6 s | cardstock handled: granular 2–6 kHz noise + low-mid body |
@@ -40,15 +43,42 @@ cross-correlating it against the raw render; every shipped file has a lag of
 | `bell` | 1.2 s | modal brass tram bell, 1 : 2.0 : 2.76 : 5.4 : 8.9, ding-ding |
 | `air_brake` | 0.8 s | "pssshh": highpassed noise, fast attack, long decay |
 | `brake_squeal` | 0.6 s | scratchy metal-on-metal, drifting high partials + downward glide |
-| `drone` | 2.0 s | four detuned saws, moving lowpass, ominous |
+| `drone` | 2.0 s | four detuned saws, moving lowpass, ominous — a bed under the straight-track approach |
 | `clack_1..3` | 0.12 s | dry rail joint, one metal resonance |
-| `impact_muffled_1..2` | 0.6 s | crash through a wall: lowpassed burst + 90→35 Hz sweep |
+| `impact_muffled_1..2` | 0.6 s | crash through a wall: 90→35 Hz sweep + 150–400 Hz chest + a short 1–3 kHz crack |
 | `crash_comic` | 1.2 s | comic crash + rising screech + record-scratch gesture |
-| `stamp_1..2` | 0.4 s | the hero sound: rubber transient, 140→55 Hz body, woody desk |
-| `sting_relief` | 1.5 s | Fmaj7 → C, detuned saws, light reverb |
-| `sting_dread` | 1.5 s | low cluster (minor 2nd + tritone) under a 300 Hz lowpass |
-| `sting_absurd` | 1.5 s | three off-kilter "bwah" notes with a rubbery bend |
+| `stamp_1..2` | 0.4 s | the hero sound: 140→55 Hz body, woody desk resonance, dry 1–3 kHz noise slap |
 | ambience | 30 s loop | felt more than heard; under everything |
+
+## Phone-weighted level targets
+
+The game is watched on phones at low volume, and a phone speaker reproduces
+almost nothing below ~350–400 Hz. Full-band RMS is therefore blind to the
+problem: `press` used to be a 120 Hz thump that measured "fine" and was
+inaudible in a hand. `scripts/audio-metrics.mjs` (shared by the build and the
+verifier) band-limits each slice with a 2nd-order Butterworth high-pass at
+400 Hz and low-pass at 10 kHz, then measures RMS over the active part (samples
+above −40 dB relative to the slice peak).
+
+`T` is the level `lever_clack` had before the phone pass (−22.6 dBFS on this
+metric) minus 4 dB, i.e. **−26.6 dBFS**:
+
+| Group | Target |
+|---|---|
+| `press`, `switch_*`, `lever_clack_*`, `stamp_*`, `impact_muffled_*`, `crash_comic`, `bell`, `paper_*`, `air_brake`, `brake_squeal` | `T` ± 2 dB |
+| `hover_*`, `clack_*` (quiet ticks) | `T` − 6 ± 2 dB |
+| `drone` (bed) | `T` − 8 ± 3 dB |
+
+`npm run audio:verify` enforces all of them and prints the table.
+
+## Runtime controls
+
+`src/utils/audio.ts` keeps one master mute (`M`, the "Ses" button) plus two
+independent buses, each with its own on/off and its own 0–1 slider: background
+(the ambience bed) and effects (everything else, the approach rumble included).
+The two user gains are separate nodes, so ducking the bed during a decision can
+never fight the slider. The one audio settings popover in the header exposes
+both.
 
 ## Rebuild
 

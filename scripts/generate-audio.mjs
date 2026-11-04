@@ -22,6 +22,7 @@ import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { phoneLevelDb } from './audio-metrics.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -417,31 +418,39 @@ function noiseClick(rng, { duration, tau, hp = 800, lp = 12000, bp = null, q = 1
 
 const RECIPES = {};
 
-/* --- press: muted mechanical button --- */
+/* --- press: bright mechanical button click (has to survive a phone speaker) --- */
 RECIPES.press = (rng) => {
   const out = buf(0.15);
-  const click = noiseClick(rng, {
-    duration: 0.03,
-    tau: 0.0016,
-    bp: rng.jitter(1550, 0.05),
-    q: 1.1,
-  });
-  addInto(out, click, 0, 0.55);
 
-  const body = buf(0.09);
-  const startF = rng.jitter(124, 0.04);
-  let phase = 0;
+  // 2–4 kHz noise transient: the plastic "tk" a small speaker can reproduce
+  const click = whiteNoise(rng, 0.024);
+  biquad(click, 'bandpass', rng.jitter(3000, 0.05), 0.85);
+  expDecay(click, 0.0055);
+  attack(click, 0.0004);
+  addInto(out, click, 0, 1.4);
+
+  // a brighter scuff just after it, so it reads as a switch and not as hiss
+  const scuff = noiseClick(rng, { duration: 0.014, tau: 0.0014, bp: rng.jitter(4100, 0.06), q: 1.3 });
+  addInto(out, scuff, 0.0012, 0.55);
+
+  // short body at 300–800 Hz: the housing of the button, not a bass thump
+  const body = buf(0.06);
+  let p1 = 0;
+  let p2 = 0;
+  const f1 = rng.jitter(560, 0.05);
+  const f2 = rng.jitter(430, 0.05);
   for (let i = 0; i < body.length; i++) {
-    const p = i / SR;
-    const f = startF * (1 - 0.18 * Math.min(1, p / 0.05));
-    phase += (2 * Math.PI * f) / SR;
-    body[i] = Math.sin(phase) * Math.exp(-p / 0.018);
+    const t = i / SR;
+    p1 += (2 * Math.PI * f1) / SR;
+    p2 += (2 * Math.PI * f2) / SR;
+    const env = Math.min(1, t / 0.0012) * Math.exp(-t / 0.006);
+    body[i] = (Math.sin(p1) * 0.7 + Math.sin(p2) * 0.5) * env;
   }
-  addInto(out, body, 0.002, 0.85);
+  addInto(out, body, 0.0008, 0.3);
 
-  const tail = reverb(shapedCopy(out), { mix: 0.22, room: 0.3, damp: 0.6 });
-  addInto(out, tail, 0, 0.16);
-  onePoleLP(out, 3200); // muted: no clicky top end
+  const tail = reverb(shapedCopy(out), { mix: 0.14, room: 0.28, damp: 0.6 });
+  addInto(out, tail, 0, 0.12);
+  onePoleLP(out, 9000);
   return normalize(out, -6);
 };
 
@@ -736,7 +745,7 @@ RECIPES.impact_muffled = (rng) => {
     phase += (2 * Math.PI * f) / SR;
     sweep[i] = Math.sin(phase) * Math.exp(-(i / SR) / 0.13) * (1 - Math.exp(-(i / SR) / 0.004));
   }
-  addInto(out, sweep, 0.004, 0.95);
+  addInto(out, sweep, 0.004, 0.65);
 
   const rattle = buf(0.3);
   metalResonances(rattle, rng, {
@@ -749,9 +758,23 @@ RECIPES.impact_muffled = (rng) => {
   onePoleLP(rattle, 720);
   addInto(out, rattle, 0, 0.5);
 
+  // 150–400 Hz chest: a body you feel on headphones, still "through a wall"
+  const chest = whiteNoise(rng, 0.2);
+  biquad(chest, 'bandpass', rng.jitter(265, 0.06), 1.1);
+  expDecay(chest, 0.07);
+  attack(chest, 0.002);
+  addInto(out, chest, 0, 1);
+
+  // the crack that survives a phone speaker: 1–3 kHz, short and dry
+  const crack = whiteNoise(rng, 0.12);
+  biquad(crack, 'bandpass', rng.jitter(2100, 0.08), 0.75);
+  expDecay(crack, 0.028);
+  attack(crack, 0.0009);
+  addInto(out, crack, 0, 1.7);
+
   const wet = reverb(shapedCopy(out), { mix: 0.28, room: 0.5, damp: 0.6 });
   addInto(out, wet, 0, 0.2);
-  onePoleLP(out, 900);
+  onePoleLP(out, 5200);
   return normalize(out, -3, { tail: 0.02 });
 };
 
@@ -845,7 +868,7 @@ RECIPES.stamp = (rng) => {
     phase += (2 * Math.PI * f) / SR;
     body[i] = Math.sin(phase) * Math.exp(-t / 0.048) * (1 - Math.exp(-t / 0.0018));
   }
-  addInto(out, body, 0, 1.0);
+  addInto(out, body, 0, 0.62);
 
   // woody desk resonance
   modalPartial(out, {
@@ -856,102 +879,18 @@ RECIPES.stamp = (rng) => {
     durSec: 0.2,
   });
 
+  // dry noise slap at 1–3 kHz: ink pad meeting paper, the part a phone hears
+  const slap = whiteNoise(rng, 0.1);
+  biquad(slap, 'bandpass', rng.jitter(2000, 0.07), 0.75);
+  expDecay(slap, 0.034);
+  attack(slap, 0.0008);
+  addInto(out, slap, 0, 3.4);
+
   // very short dry room tail
   const wet = reverb(shapedCopy(out), { mix: 0.16, room: 0.25, damp: 0.75 });
   addInto(out, wet, 0, 0.14);
-  onePoleLP(out, 2600);
+  onePoleLP(out, 7000);
   return normalize(out, -3, { tail: 0.02 });
-};
-
-/* --- stings --- */
-RECIPES.sting_relief = (rng) => {
-  const dur = 1.5;
-  const out = buf(dur);
-  const fmaj7 = [174.61, 220.0, 261.63, 329.63];
-  const cmaj = [130.81, 196.0, 329.63, 523.25];
-  const voice = (freqs, t0, len, amp) => {
-    for (let k = 0; k < freqs.length; k++) {
-      const f = rng.jitter(freqs[k], 0.0015);
-      const v = sawAdditive(len, f, { maxHarmonicHz: 2200, phase: rng.range(0, 6.28) });
-      shape(v, (t) => {
-        const a = Math.min(1, t / 0.32);
-        const r = Math.min(1, Math.max(0, (len - t) / (len * 0.55)));
-        return a * r * r;
-      });
-      addInto(out, v, t0, amp * (k === 0 ? 0.5 : 0.32));
-      // detuned twin for warmth
-      const v2 = sawAdditive(len, f * 1.0022, { maxHarmonicHz: 2200, phase: rng.range(0, 6.28) });
-      shape(v2, (t) => Math.min(1, t / 0.4) * Math.min(1, Math.max(0, (len - t) / (len * 0.55))));
-      addInto(out, v2, t0, amp * 0.18);
-    }
-  };
-  voice(fmaj7, 0, 0.95, 0.5);
-  voice(cmaj, 0.5, 1.0, 0.55);
-  biquadSweep(out, 'lowpass', 900, 2400, 0.8);
-  const wet = reverb(shapedCopy(out), { mix: 0.3, room: 0.7, damp: 0.4 });
-  addInto(out, wet, 0, 0.35);
-  return normalize(out, -6, { tail: 0.03 });
-};
-
-RECIPES.sting_dread = (rng) => {
-  const dur = 1.5;
-  const out = buf(dur);
-  // minor second + tritone cluster, low and creeping
-  const cluster = [55, 58.27, 77.78, 82.41, 110];
-  for (let k = 0; k < cluster.length; k++) {
-    const f = rng.jitter(cluster[k], 0.002);
-    const v = sawAdditive(dur, f, { maxHarmonicHz: 1200 });
-    shape(v, (t) => {
-      const a = Math.pow(Math.min(1, t / 0.9), 1.6);
-      const r = Math.min(1, Math.max(0, (dur - t) / 0.45));
-      return a * r;
-    });
-    addInto(out, v, 0, 0.32 / (1 + k * 0.25));
-  }
-  biquadSweep(out, 'lowpass', 240, 380, 1.2);
-  const wet = reverb(shapedCopy(out), { mix: 0.35, room: 0.8, damp: 0.55 });
-  addInto(out, wet, 0, 0.3);
-  onePoleLP(out, 900);
-  return normalize(out, -6, { tail: 0.03 });
-};
-
-RECIPES.sting_absurd = (rng) => {
-  const dur = 1.5;
-  const out = buf(dur);
-  const notes = [
-    { t: 0.0, f: 186, len: 0.3, detune: 1.0 },
-    { t: 0.34, f: 165, len: 0.3, detune: 1.012 },
-    { t: 0.68, f: 139, len: 0.62, detune: 0.995 },
-  ];
-  for (let n = 0; n < notes.length; n++) {
-    const { t, f, len, detune } = notes[n];
-    const seg = buf(len);
-    let p1 = 0;
-    let p2 = 0;
-    for (let i = 0; i < seg.length; i++) {
-      const tt = i / SR;
-      const prog = tt / len;
-      // falling "bwah" pitch plus rubbery bend at the end
-      const bend = 1 - 0.22 * prog - (n === 2 ? 0.12 * Math.sin(Math.PI * prog) * prog : 0);
-      const fa = f * bend;
-      const fb = f * bend * detune * 1.004;
-      p1 += (2 * Math.PI * fa) / SR;
-      p2 += (2 * Math.PI * fb) / SR;
-      const square = (Math.sin(p1) > 0 ? 1 : -1) * 0.55 + Math.sin(p1) * 0.25;
-      const square2 = (Math.sin(p2) > 0 ? 1 : -1) * 0.3 + Math.sin(p2) * 0.2;
-      const env =
-        Math.min(1, tt / 0.018) * Math.exp(-tt / (len * 0.55)) * Math.min(1, (len - tt) / 0.05);
-      seg[i] = (square + square2) * env;
-    }
-    const filt = buf(len);
-    filt.set(seg);
-    biquadSweep(filt, 'lowpass', 1900, 420, 5.5);
-    addInto(out, filt, t, 0.55);
-  }
-  const wet = reverb(shapedCopy(out), { mix: 0.2, room: 0.5, damp: 0.45 });
-  addInto(out, wet, 0, 0.2);
-  onePoleLP(out, 6000);
-  return normalize(out, -6, { tail: 0.03 });
 };
 
 /* ------------------------------------------------------------------ *
@@ -1100,24 +1039,39 @@ function writeWav(path, data, sampleRate = SR) {
  * 5. build
  * ------------------------------------------------------------------ */
 
+/**
+ * Phone-weighted loudness targets, in dBFS of the rendered slice.
+ *
+ * T is the level `lever_clack` had before the phone pass (−22.6 dBFS on this
+ * metric) minus 4 dB, so the pack as a whole gets 4 dB quieter against the
+ * untouched ambience bed while the cues that were inaudible on a phone
+ * (`press`, `stamp_*`, `impact_muffled_*`) come up. The verifier measures the
+ * same number and checks these bands.
+ *
+ * Peaks stay at or below the stated ceiling: −6 dBFS, and −3 dBFS for the
+ * stamp/impact group. Nothing is compressed; the trim is a single scale factor.
+ */
+const PHONE_T = -26.6;
+/** quiet ticks: hover + rail clacks */
+const PHONE_TICK = -32.6;
+/** the drone is a bed, not a cue */
+const PHONE_BED = -34.6;
+
 /** name -> number of variants (1 = no suffix in the engine) */
 const SOUNDS = [
-  { base: 'press', variants: 1, recipe: 'press', peak: -6 },
-  { base: 'hover', variants: 3, recipe: 'hover', peak: -6 },
-  { base: 'switch', variants: 2, recipe: 'switch', peak: -6 },
-  { base: 'paper', variants: 3, recipe: 'paper', peak: -6 },
-  { base: 'lever_clack', variants: 2, recipe: 'lever_clack', peak: -6 },
-  { base: 'bell', variants: 1, recipe: 'bell', peak: -6 },
-  { base: 'air_brake', variants: 1, recipe: 'air_brake', peak: -6 },
-  { base: 'brake_squeal', variants: 1, recipe: 'brake_squeal', peak: -6 },
-  { base: 'drone', variants: 1, recipe: 'drone', peak: -6 },
-  { base: 'clack', variants: 3, recipe: 'clack', peak: -6 },
-  { base: 'impact_muffled', variants: 2, recipe: 'impact_muffled', peak: -3 },
-  { base: 'crash_comic', variants: 1, recipe: 'crash_comic', peak: -3 },
-  { base: 'stamp', variants: 2, recipe: 'stamp', peak: -3 },
-  { base: 'sting_relief', variants: 1, recipe: 'sting_relief', peak: -6 },
-  { base: 'sting_dread', variants: 1, recipe: 'sting_dread', peak: -6 },
-  { base: 'sting_absurd', variants: 1, recipe: 'sting_absurd', peak: -6 },
+  { base: 'press', variants: 1, recipe: 'press', peak: -6, phone: PHONE_T },
+  { base: 'hover', variants: 3, recipe: 'hover', peak: -6, phone: PHONE_TICK },
+  { base: 'switch', variants: 2, recipe: 'switch', peak: -6, phone: PHONE_T },
+  { base: 'paper', variants: 3, recipe: 'paper', peak: -6, phone: PHONE_T },
+  { base: 'lever_clack', variants: 2, recipe: 'lever_clack', peak: -6, phone: PHONE_T },
+  { base: 'bell', variants: 1, recipe: 'bell', peak: -6, phone: PHONE_T },
+  { base: 'air_brake', variants: 1, recipe: 'air_brake', peak: -6, phone: PHONE_T },
+  { base: 'brake_squeal', variants: 1, recipe: 'brake_squeal', peak: -6, phone: PHONE_T },
+  { base: 'drone', variants: 1, recipe: 'drone', peak: -6, phone: PHONE_BED },
+  { base: 'clack', variants: 3, recipe: 'clack', peak: -6, phone: PHONE_TICK },
+  { base: 'impact_muffled', variants: 2, recipe: 'impact_muffled', peak: -3, phone: PHONE_T },
+  { base: 'crash_comic', variants: 1, recipe: 'crash_comic', peak: -3, phone: PHONE_T },
+  { base: 'stamp', variants: 2, recipe: 'stamp', peak: -3, phone: PHONE_T },
 ];
 
 function variantName(base, index, count) {
@@ -1188,9 +1142,24 @@ function main() {
       const data = recipe(rng, v);
       // recipes normalise themselves; re-normalise defensively to the spec peak
       normalize(data, sound.peak);
+      // then a single per-sound trim so the phone-weighted level hits its target
+      const phoneBefore = phoneLevelDb(data);
+      const trimDb = sound.phone - phoneBefore;
+      const trimGain = dbToGain(trimDb);
+      for (let i = 0; i < data.length; i++) data[i] *= trimGain;
+      const peakDb = gainToDb(peak(data));
+      if (peakDb > sound.peak + 0.01) {
+        console.warn(
+          `  !! ${name}: peak ${peakDb.toFixed(2)} dBFS exceeds the ${sound.peak} dBFS ceiling`,
+        );
+      }
       writeWav(join(RAW_DIR, `${name}.wav`), data);
       rendered.push({ name, data, peakDb: sound.peak });
-      console.log(`rendered ${name.padEnd(18)} ${(data.length / SR).toFixed(2)}s`);
+      console.log(
+        `rendered ${name.padEnd(18)} ${(data.length / SR).toFixed(2)}s  ` +
+          `phone ${phoneLevelDb(data).toFixed(2).padStart(7)} dBFS  ` +
+          `peak ${peakDb.toFixed(2).padStart(7)} dBFS`,
+      );
     }
   }
 

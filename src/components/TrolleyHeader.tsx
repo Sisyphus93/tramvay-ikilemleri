@@ -6,6 +6,7 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { RotateCcw, Volume2, VolumeX } from 'lucide-react';
+import { AudioSettings } from './AudioSettings.tsx';
 
 interface TrolleyHeaderProps {
   currentStep: number;
@@ -78,6 +79,8 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
             )}
             <span className="hidden sm:inline">{soundEnabled ? 'Ses' : 'Sessiz'}</span>
           </button>
+
+          <AudioSettings />
 
           {(isPlaying || showRestart) && (
             <button

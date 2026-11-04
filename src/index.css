@@ -199,6 +199,132 @@ button:disabled { cursor: not-allowed; }
 
 .pill-button--on:hover { background: #2c2924; }
 
+/* --- Audio settings: one compact popover, overlays the page --- */
+
+.audio-settings { position: relative; display: inline-flex; }
+
+.audio-settings__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 10px;
+  width: 264px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.audio-settings__row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.audio-settings__label {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* on/off switch: 34 × 18 track, 16 px knob, inside a 30 px hit area */
+.audio-settings__switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.audio-settings__switch::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 34px;
+  height: 18px;
+  transform: translateY(-50%);
+  border-radius: 9px;
+  background: var(--control);
+  transition: background .18s var(--ease-out);
+}
+
+.audio-settings__knob {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform .18s var(--ease-out);
+}
+
+.audio-settings__switch--on::before { background: var(--accent); }
+
+.audio-settings__switch--on .audio-settings__knob { transform: translateX(16px); }
+
+.audio-settings__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.audio-settings__slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.audio-settings__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.audio-settings__slider::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.audio-settings__slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.audio-settings__slider:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.audio-settings__pct {
+  min-width: 34px;
+  text-align: right;
+  font-size: var(--fs-small);
+  color: var(--muted);
+}
+
 .progress-rail {
   position: relative;
   height: 4px;
@@ -1077,6 +1203,22 @@ main.screen-main {
   .meter__value { font-size: 13px; }
 
   .pill-button { height: 32px; min-width: 32px; padding: 0 8px; }
+
+  /* the popover becomes a sheet under the header and overlays the page */
+  .audio-settings { position: static; }
+
+  .audio-settings__panel {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    width: auto;
+    gap: 8px;
+    padding: 10px var(--pad) 12px;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+  }
 
   .poster__masthead {
     height: auto;
