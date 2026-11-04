@@ -213,7 +213,6 @@ export default function App() {
   useEffect(() => () => clearRevealTimer(), [clearRevealTimer]);
 
   const handleNextDilemma = useCallback(() => {
-    playPaper();
     clearRevealTimer();
     verdictGuardRef.current = false;
     if (currentStep < DILEMMAS.length - 1) {
