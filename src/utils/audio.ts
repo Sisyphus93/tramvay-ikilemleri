@@ -3,738 +3,885 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Premium hybrid sound engine.
-// Pure Web Audio API — no audio files.
-// Layers:
-// 1. A warm, slowly evolving chord bed with a gentle filter LFO.
-// 2. A shared master bus: soft compression + a short convolution reverb for space.
-// 3. Refined cues: hover, lever, decision whoosh, reveal chime, transitions,
-//    tram sweep, impact, pencil, paper, ticks, chord swell and summary payoff.
+/**
+ * Sample-based foley engine for "Absürt Tramvay İkilemleri".
+ *
+ * The world is a printed dossier: paper, ink, steel, old Istanbul tram.
+ * This engine plays ONLY pre-rendered samples from public/audio/ (a single
+ * SFX sprite + a seamless ambience loop), generated procedurally by
+ * scripts/generate-audio.mjs. No oscillator tones, no synth bleeps.
+ *
+ * Hard rules honored here:
+ *  - No AudioContext exists before unlockAudio() (called synchronously inside
+ *    the first user gesture — "İkilemlere Başla" / Enter / Space).
+ *  - The game never crashes because of audio: every public function is
+ *    fail-silent, missing/undecodable files (including SPA-fallback HTML
+ *    served for absent /audio/* paths) produce at most one console.warn each.
+ *  - Mute state persists in `tramvay_sound_enabled` (App.tsx owns the M key;
+ *    this module adds no keyboard listeners). Volume persists in
+ *    `tramvay_volume` (default 0.7 — this is played on stream).
+ *
+ * Gain graph:
+ *   sfx slices ─────────────► sfxBus ─┐
+ *   ambience loop ► ambBus ► duckGain ┴► master ► limiter ► destination
+ *
+ * The old oscillator engine is preserved (unimported) in ./audio.synth.ts.
+ */
 
-let audioCtx: AudioContext | null = null;
+export type Mood = 'relief' | 'dread' | 'absurd';
+
+/* =========================================================================
+ * Named timing constants (seconds)
+ * ========================================================================= */
+
+/** Near-silent beat between the impact hit and the ink stamp. */
+export const SILENCE_BEAT_SEC = 0.08;
+/** Ink stamp lands this long after the impact hit starts. */
+export const STAMP_AFTER_IMPACT_SEC = 0.3;
+/** Mood sting starts this long after the stamp. */
+export const STING_AFTER_STAMP_SEC = 0.4;
+/** Ambience fade-in after unlock. */
+export const AMBIENCE_FADEIN_SEC = 3;
+/** Ambience restore ramp after the sting begins (spec: 1–3 s). */
+export const AMBIENCE_RESTORE_SEC = 2;
+/** Ambience duck level while a decision plays out (35 %). */
+export const DUCK_DECISION = 0.35;
+/** Ambience duck level for the impact silence beat (almost zero). */
+export const DUCK_IMPACT = 0.02;
+
+/* =========================================================================
+ * Module state
+ * ========================================================================= */
+
+interface AudioManifest {
+  sampleRate?: number;
+  formats?: string[];
+  sprite: Record<string, [number, number]>;
+}
+
+interface ActiveVoice {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+}
+
+interface PendingPlay {
+  name: string;
+  opts: PlayOptions;
+  at: number; // performance.now() when queued
+}
+
+interface PlayOptions {
+  gain?: number;
+  /** Absolute AudioContext time; defaults to "now". */
+  when?: number;
+  rate?: number;
+  /** Tonal sounds skip playback-rate jitter. */
+  tonal?: boolean;
+}
+
+const KEY_ENABLED = 'tramvay_sound_enabled';
+const KEY_VOLUME = 'tramvay_volume';
+const DEFAULT_VOLUME = 0.7;
+
+const VARIANT_GROUPS: Record<string, string[]> = {
+  hover: ['hover_1', 'hover_2', 'hover_3'],
+  switch: ['switch_1', 'switch_2'],
+  paper: ['paper_1', 'paper_2', 'paper_3'],
+  lever_clack: ['lever_clack_1', 'lever_clack_2'],
+  clack: ['clack_1', 'clack_2', 'clack_3'],
+  impact_muffled: ['impact_muffled_1', 'impact_muffled_2'],
+  stamp: ['stamp_1', 'stamp_2'],
+};
+
+let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+let limiter: DynamicsCompressorNode | null = null;
+let sfxBus: GainNode | null = null;
+let ambBus: GainNode | null = null;
+let duckGain: GainNode | null = null;
+
+let manifest: AudioManifest | null = null;
+let spriteBuffer: AudioBuffer | null = null;
+let ambBuffer: AudioBuffer | null = null;
+let ambSource: AudioBufferSourceNode | null = null;
+
+let manifestPromise: Promise<AudioManifest | null> | null = null;
+let bytesPromise: Promise<Record<string, ArrayBuffer | null>> | null = null;
+let readyPromise: Promise<void> | null = null;
+
+const activeVoices = new Set<ActiveVoice>();
+const pendingPlays: PendingPlay[] = [];
+const lastVariant: Record<string, string> = {};
+const warnedKeys = new Set<string>();
+
+let hoverCapable: boolean | null = null;
+
 let soundEnabled = true;
+let volume = DEFAULT_VOLUME;
 
-interface AudioBus {
-  input: GainNode;
-  reverb: ConvolverNode;
-  wet: GainNode;
-  compressor: DynamicsCompressorNode;
+interface RumbleState {
+  source: AudioBufferSourceNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
 }
+let rumble: RumbleState | null = null;
+let brownBuffer: AudioBuffer | null = null;
 
-let bus: AudioBus | null = null;
-let busCtx: AudioContext | null = null;
+/* =========================================================================
+ * Small helpers — everything fail-silent
+ * ========================================================================= */
 
-interface MusicNodes {
-  masterGain: GainNode | null;
-  filter: BiquadFilterNode | null;
-  oscillators: OscillatorNode[];
-  lfo: OscillatorNode | null;
-  lfoGain: GainNode | null;
-  intervalId: number | null;
-}
-
-const musicNodes: MusicNodes = {
-  masterGain: null,
-  filter: null,
-  oscillators: [],
-  lfo: null,
-  lfoGain: null,
-  intervalId: null,
-};
-
-function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
-    }
-  }
-  if (audioCtx && audioCtx.state === 'suspended') {
-    void audioCtx.resume();
-  }
-  return audioCtx;
-}
-
-function createImpulse(ctx: AudioContext, duration = 2.1, decay = 2.7): AudioBuffer {
-  const rate = ctx.sampleRate;
-  const length = Math.floor(rate * duration);
-  const impulse = ctx.createBuffer(2, length, rate);
-  for (let channel = 0; channel < 2; channel++) {
-    const data = impulse.getChannelData(channel);
-    for (let i = 0; i < length; i++) {
-      const t = i / length;
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
-    }
-  }
-  return impulse;
-}
-
-function getBus(ctx: AudioContext): AudioBus {
-  if (bus && busCtx === ctx) return bus;
-
-  const input = ctx.createGain();
-  input.gain.value = 0.88;
-
-  const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -18;
-  compressor.knee.value = 24;
-  compressor.ratio.value = 3.5;
-  compressor.attack.value = 0.004;
-  compressor.release.value = 0.28;
-
-  const reverb = ctx.createConvolver();
-  reverb.buffer = createImpulse(ctx);
-
-  const wet = ctx.createGain();
-  wet.gain.value = 0.22;
-
-  input.connect(compressor);
-  compressor.connect(ctx.destination);
-  reverb.connect(wet);
-  wet.connect(compressor);
-
-  bus = { input, reverb, wet, compressor };
-  busCtx = ctx;
-  return bus;
-}
-
-/** Route a cue through the mastered bus, with an optional reverb send. */
-function connectOutput(node: AudioNode, reverbSend = 0.12): void {
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  const b = getBus(ctx);
-  node.connect(b.input);
-  if (reverbSend > 0) {
-    const send = ctx.createGain();
-    send.gain.value = reverbSend;
-    node.connect(send);
-    send.connect(b.reverb);
-  }
-}
-
-function createNoiseBuffer(
-  ctx: AudioContext,
-  duration: number,
-  shape: (p: number, t: number) => number,
-): AudioBuffer {
-  const size = Math.floor(ctx.sampleRate * duration);
-  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < size; i++) {
-    const p = i / size;
-    const t = i / ctx.sampleRate;
-    data[i] = (Math.random() * 2 - 1) * shape(p, t);
-  }
-  return buffer;
-}
-
-export const setSoundEnabled = (enabled: boolean) => {
-  soundEnabled = enabled;
+function warnOnce(key: string, message: string): void {
+  if (warnedKeys.has(key)) return;
+  warnedKeys.add(key);
   try {
-    localStorage.setItem('tramvay_sound_enabled', enabled ? 'true' : 'false');
+    console.warn(message);
   } catch {
-    // Ignore
+    // ignore
   }
+}
 
-  if (!enabled) {
-    stopMusicBed();
-  } else {
-    startMusicBed();
-  }
-};
+function errText(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
-export const getSoundEnabled = (): boolean => {
-  if (typeof window === 'undefined') return true;
+function readStoredEnabled(): boolean {
   try {
-    const saved = localStorage.getItem('tramvay_sound_enabled');
+    const saved = localStorage.getItem(KEY_ENABLED);
+    if (saved !== null) return saved === 'true';
+  } catch {
+    // ignore
+  }
+  return true;
+}
+
+function readStoredVolume(): number {
+  try {
+    const saved = localStorage.getItem(KEY_VOLUME);
     if (saved !== null) {
-      soundEnabled = saved === 'true';
+      const v = Number.parseFloat(saved);
+      if (Number.isFinite(v)) return Math.min(1, Math.max(0, v));
     }
   } catch {
-    // Ignore
+    // ignore
   }
-  return soundEnabled;
-};
+  return DEFAULT_VOLUME;
+}
 
-// ==========================================
-// 1. AMBIENT MUSIC BED
-// ==========================================
-
-// Fmaj7 -> Dm9 -> Bbmaj7 -> C9sus4, voiced low and warm.
-const CHORD_PROGRESSIONS = [
-  [174.61, 220.0, 261.63, 329.63, 349.23],
-  [146.83, 220.0, 261.63, 293.66, 329.63],
-  [116.54, 174.61, 233.08, 293.66, 349.23],
-  [130.81, 196.0, 261.63, 293.66, 392.0],
-];
-
-let currentChordIndex = 0;
-
-export const startMusicBed = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-  if (musicNodes.masterGain) return;
-
+function persist(key: string, value: string): void {
   try {
-    const now = ctx.currentTime;
-
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0, now);
-    masterGain.gain.linearRampToValueAtTime(0.052, now + 2.4);
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(420, now);
-    filter.Q.value = 0.6;
-
-    // Very slow filter breathing keeps the pad from feeling static.
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.value = 0.055;
-    lfoGain.gain.value = 85;
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-    lfo.start(now);
-
-    filter.connect(masterGain);
-    connectOutput(masterGain, 0.28);
-
-    musicNodes.masterGain = masterGain;
-    musicNodes.filter = filter;
-    musicNodes.lfo = lfo;
-    musicNodes.lfoGain = lfoGain;
-
-    const playChord = (frequencies: number[]) => {
-      if (!musicNodes.masterGain || !audioCtx) return;
-
-      const stopAt = audioCtx.currentTime + 0.9;
-      musicNodes.oscillators.forEach((osc) => {
-        try {
-          osc.stop(stopAt);
-        } catch {
-          // Ignore
-        }
-      });
-      musicNodes.oscillators = [];
-
-      const chordTime = audioCtx.currentTime;
-      frequencies.forEach((freq, idx) => {
-        const osc = audioCtx!.createOscillator();
-        const oscGain = audioCtx!.createGain();
-
-        osc.type = idx === 0 ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq, chordTime);
-        osc.detune.value = (idx - 2) * 2.5;
-
-        oscGain.gain.setValueAtTime(0, chordTime);
-        oscGain.gain.linearRampToValueAtTime(0.19, chordTime + 1.25);
-        oscGain.gain.exponentialRampToValueAtTime(0.13, chordTime + 4.8);
-
-        osc.connect(oscGain);
-        oscGain.connect(filter);
-        osc.start(chordTime);
-        musicNodes.oscillators.push(osc);
-      });
-    };
-
-    playChord(CHORD_PROGRESSIONS[currentChordIndex]);
-
-    musicNodes.intervalId = window.setInterval(() => {
-      if (!soundEnabled || !musicNodes.masterGain) return;
-      currentChordIndex = (currentChordIndex + 1) % CHORD_PROGRESSIONS.length;
-      playChord(CHORD_PROGRESSIONS[currentChordIndex]);
-    }, 5800);
+    localStorage.setItem(key, value);
   } catch {
-    // Ignore audio context errors.
+    // ignore
   }
+}
+
+function isTonal(sliceName: string): boolean {
+  return sliceName === 'bell' || sliceName === 'drone' || sliceName.startsWith('sting_');
+}
+
+/** Group base name: "hover_2" → "hover". */
+function baseName(sliceName: string): string {
+  return sliceName.replace(/_\d+$/, '');
+}
+
+/* =========================================================================
+ * Loading: manifest + bytes (SPA-fallback safe), decode
+ * ========================================================================= */
+
+const MAGIC_CHECKS: Record<string, (b: Uint8Array) => boolean> = {
+  wav: (b) => b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x41 && b[10] === 0x56 && b[11] === 0x45, // RIFF....WAVE
+  ogg: (b) => b.length >= 4 && b[0] === 0x4f && b[1] === 0x67 && b[2] === 0x67 && b[3] === 0x53, // OggS
+  m4a: (b) => b.length >= 8 && b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70, // ....ftyp
 };
 
-export const stopMusicBed = () => {
-  if (musicNodes.intervalId) {
-    clearInterval(musicNodes.intervalId);
-    musicNodes.intervalId = null;
-  }
+const MIME_BY_FORMAT: Record<string, string> = {
+  ogg: 'audio/ogg; codecs="vorbis"',
+  m4a: 'audio/mp4; codecs="mp4a.40.2"',
+  wav: 'audio/wav',
+};
 
-  // Detach state immediately so a quick off→on toggle can restart the bed.
-  const masterGain = musicNodes.masterGain;
-  const filter = musicNodes.filter;
-  const lfo = musicNodes.lfo;
-  const lfoGain = musicNodes.lfoGain;
-  const oscillators = [...musicNodes.oscillators];
-
-  musicNodes.masterGain = null;
-  musicNodes.filter = null;
-  musicNodes.lfo = null;
-  musicNodes.lfoGain = null;
-  musicNodes.oscillators = [];
-
-  if (!masterGain || !audioCtx) return;
-
-  const now = audioCtx.currentTime;
+function pickFormat(formats: string[] | undefined): string {
+  const order = formats && formats.length ? formats : ['ogg', 'm4a', 'wav'];
   try {
-    masterGain.gain.cancelScheduledValues(now);
-    masterGain.gain.linearRampToValueAtTime(0.001, now + 1.6);
-    setTimeout(() => {
-      oscillators.forEach((osc) => {
-        try {
-          osc.stop();
-        } catch {
-          // Ignore
-        }
-      });
-      try {
-        lfo?.stop();
-        lfo?.disconnect();
-        lfoGain?.disconnect();
-        filter?.disconnect();
-        masterGain.disconnect();
-      } catch {
-        // Ignore
+    if (typeof document !== 'undefined') {
+      const probe = document.createElement('audio');
+      for (const f of order) {
+        const mime = MIME_BY_FORMAT[f];
+        if (mime && probe.canPlayType(mime) !== '') return f;
       }
-    }, 1750);
+    }
+  } catch {
+    // ignore
+  }
+  return 'wav'; // last resort: everything decodes WAV
+}
+
+function loadManifest(): Promise<AudioManifest | null> {
+  if (!manifestPromise) {
+    manifestPromise = (async () => {
+      try {
+        const res = await fetch('/audio/sfx.json', { cache: 'force-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const parsed = JSON.parse(await res.text()) as AudioManifest;
+        if (!parsed || typeof parsed !== 'object' || !parsed.sprite) {
+          throw new Error('malformed manifest');
+        }
+        manifest = parsed;
+        return parsed;
+      } catch (err) {
+        // A missing file may come back as index.html with HTTP 200 (SPA
+        // fallback); JSON.parse then throws. Either way: run silently.
+        warnOnce('sfx.json', `[audio] /audio/sfx.json unavailable (${errText(err)}) — the game will run silently.`);
+        return null;
+      }
+    })();
+  }
+  return manifestPromise;
+}
+
+async function fetchAudioBytes(file: string, fmt: string): Promise<ArrayBuffer | null> {
+  try {
+    const res = await fetch(`/audio/${file}.${fmt}`, { cache: 'force-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const bytes = await res.arrayBuffer();
+    const check = MAGIC_CHECKS[fmt];
+    if (check && !check(new Uint8Array(bytes.slice(0, 12)))) {
+      // SPA fallback served HTML (or something else) with HTTP 200.
+      throw new Error('not audio data (SPA fallback?)');
+    }
+    return bytes;
+  } catch (err) {
+    warnOnce(`${file}.${fmt}`, `[audio] /audio/${file}.${fmt} unavailable (${errText(err)}) — related sounds stay silent.`);
+    return null;
+  }
+}
+
+/** Kick off manifest + byte fetches once (idempotent). */
+function ensureBytes(): Promise<Record<string, ArrayBuffer | null>> {
+  if (!bytesPromise) {
+    bytesPromise = loadManifest().then(async (m) => {
+      const fmt = pickFormat(m?.formats);
+      const [sfx, amb] = await Promise.all([
+        m ? fetchAudioBytes('sfx', fmt) : Promise.resolve(null),
+        m ? fetchAudioBytes('ambience', fmt) : Promise.resolve(null),
+      ]);
+      return { sfx, amb };
+    });
+  }
+  return bytesPromise;
+}
+
+/**
+ * Prefetch manifest + audio bytes on page load. Creates NO AudioContext
+ * (autoplay policy: the context is created inside the first user gesture).
+ */
+export function preloadAudio(): void {
+  try {
+    if (typeof window === 'undefined') return;
+    soundEnabled = readStoredEnabled();
+    volume = readStoredVolume();
+    void ensureBytes();
+  } catch {
+    // ignore
+  }
+}
+
+/* =========================================================================
+ * Graph
+ * ========================================================================= */
+
+function buildGraph(c: AudioContext): void {
+  master = c.createGain();
+  master.gain.value = soundEnabled ? volume : 0;
+
+  limiter = c.createDynamicsCompressor();
+  limiter.threshold.value = -3;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 12;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.15;
+
+  sfxBus = c.createGain();
+  sfxBus.gain.value = 1;
+
+  duckGain = c.createGain();
+  duckGain.gain.value = 1;
+
+  ambBus = c.createGain();
+  ambBus.gain.value = 0.0001;
+
+  sfxBus.connect(master);
+  ambBus.connect(duckGain);
+  duckGain.connect(master);
+  master.connect(limiter);
+  limiter.connect(c.destination);
+}
+
+function applyMasterGain(smooth: boolean): void {
+  if (!ctx || !master) return;
+  const t = ctx.currentTime;
+  const target = soundEnabled ? volume : 0;
+  try {
+    master.gain.cancelScheduledValues(t);
+    if (smooth) {
+      master.gain.setValueAtTime(master.gain.value, t);
+      master.gain.linearRampToValueAtTime(target, t + 0.2);
+    } else {
+      master.gain.value = target;
+    }
   } catch {
     try {
-      masterGain.disconnect();
+      master.gain.value = target;
     } catch {
-      // Ignore
+      // ignore
     }
   }
-};
+}
 
-/** Duck the bed during action, then restore it. */
-export const duckMusicBed = (duck: boolean) => {
-  if (!musicNodes.masterGain || !audioCtx) return;
-  const now = audioCtx.currentTime;
+function onVisibilityChange(): void {
   try {
-    const targetGain = duck ? 0.022 : 0.052;
-    musicNodes.masterGain.gain.cancelScheduledValues(now);
-    musicNodes.masterGain.gain.linearRampToValueAtTime(targetGain, now + 0.32);
+    if (!ctx) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      if (ctx.state === 'running') void ctx.suspend().catch(() => undefined);
+    } else if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => undefined);
+    }
   } catch {
-    // Ignore
+    // ignore
   }
-};
-
-// ==========================================
-// 2. REFINED CUES
-// ==========================================
-
-/** A tiny, almost subliminal hover blip. */
-export const playHoverTick = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(1720, now);
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.022, now + 0.006);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
-
-  osc.connect(gain);
-  connectOutput(gain, 0.08);
-  osc.start(now);
-  osc.stop(now + 0.05);
-};
-
-/** Crisp brass-and-wood lever snap: noise transient + metallic ping. */
-export const playLeverSnap = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, 0.07, (p) => Math.pow(1 - p, 2) * 0.6);
-  const noiseFilter = ctx.createBiquadFilter();
-  noiseFilter.type = 'bandpass';
-  noiseFilter.frequency.setValueAtTime(1250, now);
-  noiseFilter.Q.value = 1.1;
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.075, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
-  noise.connect(noiseFilter);
-  noiseFilter.connect(noiseGain);
-  connectOutput(noiseGain, 0.12);
-  noise.start(now);
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(1180, now);
-  osc.frequency.exponentialRampToValueAtTime(420, now + 0.09);
-  gain.gain.setValueAtTime(0.11, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  osc.connect(gain);
-  connectOutput(gain, 0.22);
-  osc.start(now);
-  osc.stop(now + 0.13);
-};
-
-/** Legacy alias kept for existing call sites. */
-export const playTinyClick = () => {
-  playLeverSnap();
-};
-
-/** Airy whoosh when a decision is locked in. */
-export const playDecisionWhoosh = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  duckMusicBed(true);
-  const now = ctx.currentTime;
-  const duration = 0.52;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.42);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(380, now);
-  filter.frequency.exponentialRampToValueAtTime(1750, now + duration * 0.7);
-  filter.Q.value = 0.8;
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.001, now);
-  gain.gain.linearRampToValueAtTime(0.085, now + 0.1);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.26);
-  noise.start(now);
-
-  const tone = ctx.createOscillator();
-  const toneGain = ctx.createGain();
-  tone.type = 'sine';
-  tone.frequency.setValueAtTime(180, now);
-  tone.frequency.exponentialRampToValueAtTime(92, now + duration);
-  toneGain.gain.setValueAtTime(0.055, now);
-  toneGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  tone.connect(toneGain);
-  connectOutput(toneGain, 0.18);
-  tone.start(now);
-  tone.stop(now + duration + 0.02);
-
-  setTimeout(() => duckMusicBed(false), 820);
-};
-
-/** Brass-like three-note reveal chime with a long, soft tail. */
-export const playRevealChime = (intensity = 1) => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-
-  notes.forEach((freq, idx) => {
-    const t = now + idx * 0.11;
-    const osc = ctx.createOscillator();
-    const shimmer = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    shimmer.type = 'triangle';
-    shimmer.frequency.setValueAtTime(freq * 2, t);
-    shimmer.detune.value = 4;
-
-    const shimmerGain = ctx.createGain();
-    shimmerGain.gain.value = 0.18;
-
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.075 * intensity, t + 0.018);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
-
-    osc.connect(gain);
-    shimmer.connect(shimmerGain);
-    shimmerGain.connect(gain);
-    connectOutput(gain, 0.45);
-
-    osc.start(t);
-    shimmer.start(t);
-    osc.stop(t + 0.98);
-    shimmer.stop(t + 0.98);
-  });
-};
-
-/** Paper swish with a soft high shimmer — the signature scene transition. */
-export const playPaperSwish = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.58;
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.5);
-
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(720, now);
-  filter.frequency.linearRampToValueAtTime(2800, now + duration * 0.5);
-  filter.frequency.linearRampToValueAtTime(620, now + duration);
-
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.095, now);
-  gain.gain.exponentialRampToValueAtTime(0.004, now + duration);
-
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.2);
-  noise.start(now);
-};
-
-/** Thin brass-foil shimmer for blueprint scene transitions. */
-export const playFoilSweep = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.78;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.32);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'highpass';
-  filter.frequency.setValueAtTime(1700, now);
-  filter.frequency.linearRampToValueAtTime(5200, now + duration);
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.001, now);
-  gain.gain.linearRampToValueAtTime(0.042, now + 0.12);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.34);
-  noise.start(now);
-
-  [1567.98, 2093.0].forEach((freq, idx) => {
-    const t = now + 0.08 + idx * 0.16;
-    const osc = ctx.createOscillator();
-    const ping = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    ping.gain.setValueAtTime(0, t);
-    ping.gain.linearRampToValueAtTime(0.026, t + 0.01);
-    ping.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    osc.connect(ping);
-    connectOutput(ping, 0.42);
-    osc.start(t);
-    osc.stop(t + 0.32);
-  });
-};
-
-export const playPremiumTransition = () => {
-  playPaperSwish();
-  playFoilSweep();
-  playRevealChime(0.42);
-};
-
-/** Pencil scratch: low-passed noise with a gentle flutter. */
-export const playPencilScratch = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.24;
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (_p, t) => {
-    const flutter = 0.5 + 0.5 * Math.sin(2 * Math.PI * 11 * t);
-    return flutter * 0.35;
-  });
-
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(1400, now);
-  filter.Q.value = 1.5;
-
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.09, now);
-  gain.gain.exponentialRampToValueAtTime(0.008, now + duration);
-
-  noise.connect(filter);
-  filter.connect(gain);
-  connectOutput(gain, 0.12);
-  noise.start(now);
-};
-
-/** Short sine blip for small UI toggles. */
-export const playSoftTick = (step = 0) => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const frequencies = [880, 1100, 1320];
-  const freq = frequencies[step % frequencies.length];
-  const now = ctx.currentTime;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(freq, now);
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.075, now + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
-
-  osc.connect(gain);
-  connectOutput(gain, 0.18);
-  osc.start(now);
-  osc.stop(now + 0.115);
-};
-
-/** Sonic signature: sparse three-note bell motif. */
-export const playSonicSignatureMotif = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  duckMusicBed(true);
-  const now = ctx.currentTime;
-  const notes = [659.25, 783.99, 987.77]; // E5, G5, B5
-
-  notes.forEach((freq, idx) => {
-    const t = now + idx * 0.18;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, t);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.11, t + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-
-    osc.connect(gain);
-    connectOutput(gain, 0.42);
-    osc.start(t);
-    osc.stop(t + 0.72);
-  });
-
-  setTimeout(() => duckMusicBed(false), 1100);
-};
-
-/** Tram acceleration: rising sine glide plus a breath of filtered noise. */
-export const playRisingSweep = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  duckMusicBed(true);
-  const now = ctx.currentTime;
-  const duration = 1.55;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(320, now);
-  osc.frequency.exponentialRampToValueAtTime(880, now + duration);
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.082, now + 0.16);
-  gain.gain.linearRampToValueAtTime(0.082, now + duration * 0.82);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.connect(gain);
-  connectOutput(gain, 0.16);
-  osc.start(now);
-  osc.stop(now + duration + 0.04);
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, duration, (p) => Math.sin(p * Math.PI) * 0.22);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(520, now);
-  filter.frequency.linearRampToValueAtTime(2600, now + duration);
-  filter.Q.value = 0.7;
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.035, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  noise.connect(filter);
-  filter.connect(noiseGain);
-  connectOutput(noiseGain, 0.12);
-  noise.start(now);
-
-  setTimeout(() => duckMusicBed(false), 1850);
-};
-
-/** Muted low impact with a soft body and reverb tail. */
-export const playLowThump = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const duration = 0.34;
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(96, now);
-  osc.frequency.exponentialRampToValueAtTime(38, now + duration);
-  gain.gain.setValueAtTime(0.23, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.connect(gain);
-  connectOutput(gain, 0.26);
-  osc.start(now);
-  osc.stop(now + duration + 0.02);
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = createNoiseBuffer(ctx, 0.12, (p) => Math.pow(1 - p, 3) * 0.3);
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(220, now);
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.06, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  noise.connect(filter);
-  filter.connect(noiseGain);
-  connectOutput(noiseGain, 0.18);
-  noise.start(now);
-
-  setTimeout(() => duckMusicBed(false), 460);
-};
-
-/** Five-voice chord for payoff / summary. */
-export const playChordSwell = () => {
-  if (!soundEnabled) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const freqs = [174.61, 261.63, 349.23, 440.0, 523.25, 659.25];
-  const duration = 2.7;
-
-  freqs.forEach((freq, idx) => {
-    const t = now + idx * 0.045;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = idx < 2 ? 'sine' : 'triangle';
-    osc.frequency.setValueAtTime(freq, t);
-    osc.detune.value = (idx - 2.5) * 1.8;
-
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.055, t + 0.45);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
-
-    osc.connect(gain);
-    connectOutput(gain, 0.5);
-    osc.start(t);
-    osc.stop(t + duration + 0.02);
-  });
-};
-
-export const playSummaryReveal = () => {
-  if (!soundEnabled) return;
-  duckMusicBed(true);
-  playChordSwell();
-  playRevealChime(0.8);
-  setTimeout(() => duckMusicBed(false), 2600);
-};
+}
+
+/**
+ * Create the AudioContext and start decoding. MUST be called synchronously
+ * inside a user gesture (the "İkilemlere Başla" click or Enter/Space).
+ * Resolves when the SFX sprite is ready; the ambience keeps loading in the
+ * background and fades in over ~3 s once decoded. Never rejects.
+ */
+export function unlockAudio(): Promise<void> {
+  try {
+    if (typeof window === 'undefined') return Promise.resolve();
+    if (!ctx) {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) {
+        warnOnce('ctx', '[audio] Web Audio API unavailable — the game will run silently.');
+        return Promise.resolve();
+      }
+      soundEnabled = readStoredEnabled();
+      volume = readStoredVolume();
+      ctx = new AudioContextClass();
+      buildGraph(ctx);
+      try {
+        document.addEventListener('visibilitychange', onVisibilityChange);
+      } catch {
+        // ignore
+      }
+    }
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+    if (!readyPromise) readyPromise = initAudio();
+    return readyPromise;
+  } catch (err) {
+    warnOnce('unlock', `[audio] unlock failed (${errText(err)}) — the game will run silently.`);
+    return Promise.resolve();
+  }
+}
+
+async function initAudio(): Promise<void> {
+  try {
+    const m = await loadManifest();
+    const bytes = await ensureBytes();
+    if (!ctx || !m) return;
+    if (bytes.sfx) {
+      try {
+        // slice(0): decodeAudioData detaches the buffer; keep ours reusable.
+        spriteBuffer = await ctx.decodeAudioData(bytes.sfx.slice(0));
+      } catch (err) {
+        warnOnce('decode-sfx', `[audio] could not decode the SFX sprite (${errText(err)}) — SFX stay silent.`);
+        spriteBuffer = null;
+      }
+    }
+    flushPending();
+    void initAmbience(bytes.amb);
+  } catch (err) {
+    warnOnce('init', `[audio] init failed (${errText(err)}) — the game will run silently.`);
+  }
+}
+
+async function initAmbience(bytes: ArrayBuffer | null): Promise<void> {
+  try {
+    if (!bytes || !ctx) return;
+    try {
+      ambBuffer = await ctx.decodeAudioData(bytes.slice(0));
+    } catch (err) {
+      warnOnce('decode-ambience', `[audio] could not decode the ambience loop (${errText(err)}) — no room tone.`);
+      return;
+    }
+    startAmbience();
+  } catch {
+    // ignore
+  }
+}
+
+function startAmbience(): void {
+  try {
+    if (!ctx || !ambBuffer || !ambBus || ambSource) return;
+    const src = ctx.createBufferSource();
+    src.buffer = ambBuffer;
+    src.loop = true;
+    src.connect(ambBus);
+    const t = ctx.currentTime;
+    ambBus.gain.cancelScheduledValues(t);
+    ambBus.gain.setValueAtTime(0.0001, t);
+    ambBus.gain.linearRampToValueAtTime(1, t + AMBIENCE_FADEIN_SEC);
+    src.start(t);
+    ambSource = src;
+  } catch {
+    // ignore
+  }
+}
+
+/* =========================================================================
+ * Slice playback (variants, jitter, fades, pending queue)
+ * ========================================================================= */
+
+function pickVariant(name: string): string {
+  const group = VARIANT_GROUPS[name];
+  if (!group || !manifest) return name;
+  const avail = group.filter((g) => Boolean(manifest && manifest.sprite[g]));
+  if (avail.length === 0) return name;
+  if (avail.length === 1) {
+    lastVariant[name] = avail[0];
+    return avail[0];
+  }
+  let choice = avail[Math.floor(Math.random() * avail.length)];
+  if (choice === lastVariant[name]) {
+    const others = avail.filter((a) => a !== lastVariant[name]);
+    choice = others[Math.floor(Math.random() * others.length)];
+  }
+  lastVariant[name] = choice;
+  return choice;
+}
+
+function flushPending(): void {
+  if (pendingPlays.length === 0) return;
+  const queued = pendingPlays.splice(0, pendingPlays.length);
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  for (const item of queued) {
+    if (now - item.at < 1200) playSlice(item.name, item.opts); // drop stale requests
+  }
+}
+
+function trackVoice(voice: ActiveVoice): void {
+  activeVoices.add(voice);
+  voice.source.onended = () => {
+    activeVoices.delete(voice);
+    try {
+      voice.source.disconnect();
+      voice.gain.disconnect();
+    } catch {
+      // ignore
+    }
+  };
+}
+
+function stopVoice(voice: ActiveVoice, t: number, fadeSec: number): void {
+  try {
+    voice.gain.gain.cancelScheduledValues(t);
+    voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.0001), t);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, t + fadeSec);
+    voice.source.stop(t + fadeSec + 0.02);
+  } catch {
+    try {
+      voice.source.stop();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * Core sample trigger. Plays one sprite slice through the SFX bus with a
+ * micro fade-in/out (click-free) and ±4 % rate jitter for non-tonal sounds.
+ * Requests made before the sprite finishes decoding are queued briefly.
+ */
+function playSlice(name: string, opts: PlayOptions = {}): void {
+  try {
+    if (!soundEnabled) return;
+    if (!ctx || !spriteBuffer || !manifest || !sfxBus) {
+      // Queue only while an unlock is actually in flight.
+      if (readyPromise && pendingPlays.length < 12) {
+        pendingPlays.push({ name, opts, at: typeof performance !== 'undefined' ? performance.now() : Date.now() });
+      }
+      return;
+    }
+    const slice = pickVariant(name);
+    const spec = manifest.sprite[slice];
+    if (!spec) {
+      warnOnce(`slice:${slice}`, `[audio] sample "${slice}" is missing from the sprite — skipped.`);
+      return;
+    }
+    const [startMs, durMs] = spec;
+    const t = ctx.currentTime;
+    const t0 = Math.max(t + 0.004, opts.when ?? t + 0.004);
+    const jitter = opts.tonal || isTonal(slice) ? 1 : 1 + (Math.random() * 0.08 - 0.04);
+    const rate = Math.min(2, Math.max(0.5, (opts.rate ?? 1) * jitter));
+    const dur = Math.max(0.01, durMs / 1000 / rate);
+    const gainLevel = Math.max(0.0001, opts.gain ?? 1);
+    const fade = Math.min(0.01, dur / 4);
+
+    const source = ctx.createBufferSource();
+    source.buffer = spriteBuffer;
+    source.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(gainLevel, t0 + Math.min(0.004, fade));
+    g.gain.setValueAtTime(gainLevel, t0 + Math.max(0.005, dur - fade));
+    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    source.connect(g);
+    g.connect(sfxBus);
+    source.start(t0, startMs / 1000, durMs / 1000 + 0.01);
+    source.stop(t0 + dur + 0.03); // hard guard: never bleed into the next slice
+    trackVoice({ source, gain: g });
+  } catch {
+    // audio must never crash the game
+  }
+}
+
+/* =========================================================================
+ * Tram rumble — procedural brown noise (the one runtime-synthesized layer)
+ * ========================================================================= */
+
+function getBrownNoise(c: AudioContext): AudioBuffer {
+  if (brownBuffer) return brownBuffer;
+  const len = Math.floor(c.sampleRate * 2);
+  const b = c.createBuffer(1, len, c.sampleRate);
+  const d = b.getChannelData(0);
+  // deterministic xorshift so the rumble texture is stable across sessions
+  let seed = 0x2545f491;
+  const rnd32 = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return ((seed >>> 0) / 4294967296) * 2 - 1;
+  };
+  let last = 0;
+  let peak = 0;
+  for (let i = 0; i < len; i++) {
+    last = (last + 0.02 * rnd32()) / 1.02;
+    d[i] = last;
+    peak = Math.max(peak, Math.abs(last));
+  }
+  const norm = peak > 0 ? 0.9 / peak : 1;
+  let dc = 0;
+  const a = 1 - Math.exp((-2 * Math.PI * 8) / c.sampleRate); // DC block
+  for (let i = 0; i < len; i++) {
+    d[i] *= norm;
+    dc += a * (d[i] - dc);
+    d[i] -= dc;
+  }
+  brownBuffer = b;
+  return b;
+}
+
+function startRumble(approachSec: number): void {
+  if (!ctx || !sfxBus) return;
+  stopRumble(0.02);
+  try {
+    const c = ctx;
+    const dur = Math.max(0.3, approachSec);
+    const src = c.createBufferSource();
+    src.buffer = getBrownNoise(c);
+    src.loop = true;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.9;
+    const g = c.createGain();
+    const t = c.currentTime;
+    filter.frequency.setValueAtTime(80, t);
+    filter.frequency.exponentialRampToValueAtTime(380, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.4, t + Math.min(0.3, dur * 0.25));
+    g.gain.exponentialRampToValueAtTime(0.8, t + dur);
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(sfxBus);
+    src.start(t);
+    rumble = { source: src, filter, gain: g };
+
+    // Rail-joint clacks with a shrinking interval (550 ms × 0.86, floor
+    // 160 ms) and rising gain — scaled down for short (reduced-motion) runs.
+    let interval = Math.min(0.55, dur * 0.33);
+    let at = interval;
+    let idx = 0;
+    while (at < dur - 0.04 && idx < 12) {
+      playSlice('clack', { when: t + at, gain: 0.45 + 0.55 * (at / dur) });
+      interval = Math.max(0.16, interval * 0.86);
+      at += interval;
+      idx += 1;
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function stopRumble(fadeSec = 0.06): void {
+  const r = rumble;
+  rumble = null;
+  if (!r || !ctx) return;
+  try {
+    const t = ctx.currentTime;
+    r.gain.gain.cancelScheduledValues(t);
+    r.gain.gain.setValueAtTime(Math.max(r.gain.gain.value, 0.0001), t);
+    r.gain.gain.exponentialRampToValueAtTime(0.0001, t + fadeSec);
+    r.source.stop(t + fadeSec + 0.03);
+  } catch {
+    try {
+      r.source.stop();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function setDuck(target: number, rampSec: number): void {
+  if (!ctx || !duckGain) return;
+  try {
+    const t = ctx.currentTime;
+    duckGain.gain.cancelScheduledValues(t);
+    duckGain.gain.setValueAtTime(duckGain.gain.value, t);
+    duckGain.gain.linearRampToValueAtTime(target, t + rampSec);
+  } catch {
+    // ignore
+  }
+}
+
+/* =========================================================================
+ * Public game cues
+ * ========================================================================= */
+
+/** Muted press for primary buttons. */
+export function playPress(): void {
+  playSlice('press', { gain: 0.9 });
+}
+
+/** Light mechanical click for toggles (lever staging, sound-on). */
+export function playSwitch(): void {
+  playSlice('switch', { gain: 0.55 });
+}
+
+/** Cardstock transition (next dilemma, restart). */
+export function playPaper(): void {
+  playSlice('paper', { gain: 0.8 });
+}
+
+/** Subliminal hover tick — only on hover-capable pointers, low gain. */
+export function playHoverTick(): void {
+  try {
+    if (!soundEnabled) return;
+    if (hoverCapable === null) {
+      hoverCapable =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(hover: hover)').matches;
+    }
+    if (!hoverCapable) return;
+    playSlice('hover', { gain: 0.16 });
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Decision committed. Ducks the room, plays the lever/brake gesture, then
+ * runs the tram in: procedural brown-noise rumble (lowpass 80→380 Hz) with
+ * accelerating rail-joint clacks for `approachSec`.
+ */
+export function playDecision(pulled: boolean, approachSec: number): void {
+  try {
+    if (!ctx || !soundEnabled) return;
+    const t = ctx.currentTime;
+    setDuck(DUCK_DECISION, 0.25);
+    if (pulled) {
+      playSlice('lever_clack', { when: t + 0.005, gain: 1.0 });
+      playSlice('bell', { when: t + 0.285, gain: 0.6, tonal: true });
+    } else {
+      playSlice('air_brake', { when: t + 0.005, gain: 0.9 });
+      playSlice('brake_squeal', { when: t + 0.155, gain: 0.45 });
+      playSlice('drone', { when: t + 0.02, gain: 0.26, tonal: true });
+    }
+    startRumble(approachSec);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Tram has hit. Cuts the rumble, drops the room to a silence beat, then:
+ * impact → ink stamp (+300 ms) → mood sting (+400 ms) → ambience restored.
+ * Returns the number of milliseconds from now until the stamp lands — the
+ * caller uses it to reveal the result screen exactly on the stamp.
+ */
+export function playImpact(options: { mood: Mood; comic?: boolean }): number {
+  const msUntilStamp = Math.round((SILENCE_BEAT_SEC + STAMP_AFTER_IMPACT_SEC) * 1000);
+  try {
+    if (!ctx || !soundEnabled) return msUntilStamp;
+    const t = ctx.currentTime;
+    stopRumble(0.05);
+    const stingAt = SILENCE_BEAT_SEC + STAMP_AFTER_IMPACT_SEC + STING_AFTER_STAMP_SEC;
+    if (duckGain) {
+      duckGain.gain.cancelScheduledValues(t);
+      duckGain.gain.setValueAtTime(duckGain.gain.value, t);
+      duckGain.gain.linearRampToValueAtTime(DUCK_IMPACT, t + SILENCE_BEAT_SEC);
+      duckGain.gain.setValueAtTime(DUCK_IMPACT, t + stingAt);
+      duckGain.gain.linearRampToValueAtTime(1, t + stingAt + AMBIENCE_RESTORE_SEC);
+    }
+    playSlice(options.comic ? 'crash_comic' : 'impact_muffled', {
+      when: t + SILENCE_BEAT_SEC,
+      gain: options.comic ? 0.95 : 1.0,
+    });
+    playSlice('stamp', { when: t + SILENCE_BEAT_SEC + STAMP_AFTER_IMPACT_SEC, gain: 1.0 });
+    playSlice(`sting_${options.mood}`, { when: t + stingAt, gain: 0.72, tonal: true });
+  } catch {
+    // ignore
+  }
+  return msUntilStamp;
+}
+
+/** Stop every queued/in-flight cue (rumble, clacks, stings) and restore the room. */
+export function stopAllCues(): void {
+  try {
+    pendingPlays.length = 0;
+    stopRumble(0.08);
+    if (ctx) {
+      const t = ctx.currentTime;
+      for (const voice of Array.from(activeVoices)) stopVoice(voice, t, 0.03);
+      activeVoices.clear();
+    }
+    setDuck(1, 0.3);
+  } catch {
+    // ignore
+  }
+}
+
+/* =========================================================================
+ * Settings
+ * ========================================================================= */
+
+export function setSoundEnabled(enabled: boolean): void {
+  soundEnabled = enabled;
+  persist(KEY_ENABLED, enabled ? 'true' : 'false');
+  if (enabled) {
+    // Un-muting inside a suspended context should not start sound by itself;
+    // the context is resumed by gestures/visibility handling.
+    if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+  }
+  applyMasterGain(true);
+}
+
+export function getSoundEnabled(): boolean {
+  soundEnabled = readStoredEnabled();
+  return soundEnabled;
+}
+
+export function setVolume(v: number): void {
+  volume = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : DEFAULT_VOLUME;
+  persist(KEY_VOLUME, String(volume));
+  applyMasterGain(true);
+}
+
+export function getVolume(): number {
+  return volume;
+}
+
+/* =========================================================================
+ * Legacy aliases (kept for existing call sites; the dossier kit replaces the
+ * old oscillator cues)
+ * ========================================================================= */
+
+/** Small UI tick → the mechanical switch click. */
+export function playSoftTick(_step = 0): void {
+  playSwitch();
+}
+
+/** Summary screen payoff: the ink stamp, then the warm relief sting. */
+export function playSummaryReveal(): void {
+  try {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    playSlice('stamp', { when: t + 0.005, gain: 1.0 });
+    playSlice('sting_relief', { when: t + 0.32, gain: 0.7, tonal: true });
+  } catch {
+    // ignore
+  }
+}
+
+export function playLeverSnap(): void {
+  playSwitch();
+}
+
+export function playTinyClick(): void {
+  playSwitch();
+}
+
+export function playDecisionWhoosh(): void {
+  playPaper();
+}
+
+export function playPaperSwish(): void {
+  playPaper();
+}
+
+export function playPremiumTransition(): void {
+  playPaper();
+}
+
+export function playPencilScratch(): void {
+  playPaper();
+}
+
+export function playChordSwell(): void {
+  playSlice('sting_relief', { gain: 0.7, tonal: true });
+}
+
+/** Intentional no-op: the ink stamp + mood sting replace the reveal chime. */
+export function playRevealChime(_intensity = 1): void {
+  // silence by design
+}
+
+/** Intentional no-op: foil shimmer is gone from the dossier world. */
+export function playFoilSweep(): void {
+  // silence by design
+}
+
+/** Intentional no-op: the ambience loop is the sonic identity now. */
+export function playSonicSignatureMotif(): void {
+  // silence by design
+}
+
+/** Intentional no-op: playDecision() drives the approach (rumble + clacks). */
+export function playRisingSweep(): void {
+  // silence by design
+}
+
+/** Intentional no-op: playImpact() drives the hit. */
+export function playLowThump(): void {
+  // silence by design
+}
+
+/** Intentional no-op: the ambience starts in unlockAudio(). */
+export function startMusicBed(): void {
+  // silence by design
+}
+
+/** Intentional no-op: kept for API parity with the old engine. */
+export function stopMusicBed(): void {
+  // silence by design
+}
+
+/** Duck/restore the ambience loop (parity with the old music bed). */
+export function duckMusicBed(duck: boolean): void {
+  setDuck(duck ? DUCK_DECISION : 1, 0.3);
+}

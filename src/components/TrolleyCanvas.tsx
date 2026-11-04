@@ -5,7 +5,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Dilemma, Decision, TrackTarget, TrackEntityType } from '../types.ts';
-import { playRisingSweep, playLowThump } from '../utils/audio.ts';
 
 interface TrolleyCanvasProps {
   dilemma: Dilemma;
@@ -110,7 +109,8 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
     if (isAnimating && decision) {
       setImpactHappened(false);
       setTramProgress(0);
-      playRisingSweep();
+      // Audio is driven by App: playDecision() on commit (lever/brake gesture,
+      // rumble + rail clacks) and playImpact() from onAnimationEnd.
 
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
@@ -125,7 +125,6 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 
         if (p >= 0.9 && !impactHappened) {
           setImpactHappened(true);
-          playLowThump();
         }
 
         if (p < 1) {

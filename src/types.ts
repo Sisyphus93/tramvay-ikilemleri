@@ -63,6 +63,15 @@ export interface TrackTarget {
 export interface Dilemma {
   id: number;
   conceptualChoice?: boolean;
+  /**
+   * Verdict sting mood, used by the audio engine when the tram hits:
+   * relief = low stakes / a good outcome plausible, dread = real human
+   * deaths, absurd = ridiculous objects or scenarios. App falls back to
+   * (chosen track isHuman ? 'dread' : 'absurd') when omitted.
+   */
+  mood?: 'relief' | 'dread' | 'absurd';
+  /** Rare flag: the exaggerated comic crash replaces the muffled impact. */
+  comic?: boolean;
   title: string;
   question: string;
   straightTrack: TrackTarget;

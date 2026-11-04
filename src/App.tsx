@@ -16,19 +16,28 @@ import { TitleScreen } from './components/TitleScreen.tsx';
 import {
   getSoundEnabled,
   setSoundEnabled,
-  startMusicBed,
-  playSonicSignatureMotif,
-  playPremiumTransition,
-  playLeverSnap,
-  playDecisionWhoosh,
-  playRevealChime,
+  preloadAudio,
+  unlockAudio,
+  stopAllCues,
+  playPress,
+  playSwitch,
+  playPaper,
   playHoverTick,
-  playSoftTick,
+  playDecision,
+  playImpact,
 } from './utils/audio.ts';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
+/**
+ * Tram approach duration in seconds — must mirror TrolleyCanvas's animation
+ * duration (1650 ms, or 420 ms with prefers-reduced-motion) so the rumble,
+ * clacks and impact land on the picture.
+ */
+const APPROACH_SEC = 1.65;
+const APPROACH_SEC_REDUCED = 0.42;
 
 /**
  * Dilemmas read as "setup. question?" or "setup: prompt." — splitting them
@@ -82,19 +91,22 @@ export default function App() {
   const [history, setHistory] = useState<PlayerHistoryEntry[]>([]);
   const [soundEnabled, setSoundState] = useState<boolean>(() => getSoundEnabled());
   const lastHoverRef = useRef(0);
+  /** Delays the result screen so it appears exactly on the ink stamp. */
+  const resultTimerRef = useRef<number | null>(null);
+  /** Guards against TrolleyCanvas firing onAnimationEnd more than once. */
+  const animationEndedRef = useRef<boolean>(false);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    const startOnFirstGesture = () => {
-      if (getSoundEnabled()) startMusicBed();
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
-    window.addEventListener('pointerdown', startOnFirstGesture);
-    window.addEventListener('keydown', startOnFirstGesture);
+    // Prefetch audio bytes only — the AudioContext is created inside the
+    // first user gesture (handleStart → unlockAudio), never before.
+    preloadAudio();
     return () => {
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
+      if (resultTimerRef.current !== null) {
+        window.clearTimeout(resultTimerRef.current);
+        resultTimerRef.current = null;
+      }
+      stopAllCues();
     };
   }, []);
 
@@ -115,24 +127,25 @@ export default function App() {
     const next = !soundEnabled;
     setSoundState(next);
     setSoundEnabled(next);
-    playSoftTick(next ? 1 : 0);
+    // Audible confirmation only when turning sound ON (off is already muted).
+    if (next) playSwitch();
   }, [soundEnabled]);
 
   const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
 
   const handleStart = useCallback(() => {
-    startMusicBed();
-    playSonicSignatureMotif();
-    playPremiumTransition();
+    // unlockAudio() must run synchronously inside this gesture to satisfy
+    // the autoplay policy; it creates the context and fades in the room tone.
+    void unlockAudio();
+    playPress();
     setGameState('PLAYING');
   }, []);
 
   const handleLeverToggle = useCallback(() => {
     if (isAnimating || showResult) return;
-    setLeverPulled((prev) => {
-      playLeverSnap();
-      return !prev;
-    });
+    setLeverPulled((prev) => !prev);
+    // Sound outside the updater — setState updaters double-fire in StrictMode.
+    playSwitch();
   }, [isAnimating, showResult]);
 
   const handleMakeDecision = useCallback(
@@ -141,44 +154,65 @@ export default function App() {
 
       if (dec === 'diverted' && !leverPulled) {
         setLeverPulled(true);
-        playLeverSnap();
+        playSwitch();
       } else if (dec === 'straight' && leverPulled) {
         setLeverPulled(false);
-        playLeverSnap();
+        playSwitch();
       }
 
-      playDecisionWhoosh();
+      animationEndedRef.current = false;
+      playDecision(dec === 'diverted', reduceMotion ? APPROACH_SEC_REDUCED : APPROACH_SEC);
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
     },
-    [isAnimating, showResult, leverPulled]
+    [isAnimating, showResult, leverPulled, reduceMotion]
   );
 
   const handleAnimationEnd = useCallback(() => {
-    setIsAnimating(false);
-    setShowResult(true);
-    playRevealChime();
+    // The canvas rAF loop can in principle deliver this twice (e.g. if the
+    // effect re-runs); only the first call drives the verdict.
+    if (animationEndedRef.current) return;
+    animationEndedRef.current = true;
 
     const chosenTrack =
       decision === 'diverted'
         ? currentDilemma.divertedTrack
         : currentDilemma.straightTrack;
 
-    const entry: PlayerHistoryEntry = {
-      dilemmaId: currentDilemma.id,
-      decision: decision || 'straight',
-      leverPulled: decision === 'diverted',
-      victimsLabel: chosenTrack.label,
-      humanDeaths: chosenTrack.isHuman ? chosenTrack.count : 0,
-      materialDamageTL: chosenTrack.monetaryValueTL || 0,
-    };
+    // Impact → silence beat → ink stamp → mood sting; the result screen is
+    // revealed exactly when the stamp lands.
+    const mood = currentDilemma.mood ?? (chosenTrack.isHuman ? 'dread' : 'absurd');
+    const msUntilStamp = playImpact({ mood, comic: currentDilemma.comic === true });
 
-    setHistory((prev) => [...prev, entry]);
+    if (resultTimerRef.current !== null) window.clearTimeout(resultTimerRef.current);
+    resultTimerRef.current = window.setTimeout(() => {
+      resultTimerRef.current = null;
+      setIsAnimating(false);
+      setShowResult(true);
+
+      const entry: PlayerHistoryEntry = {
+        dilemmaId: currentDilemma.id,
+        decision: decision || 'straight',
+        leverPulled: decision === 'diverted',
+        victimsLabel: chosenTrack.label,
+        humanDeaths: chosenTrack.isHuman ? chosenTrack.count : 0,
+        materialDamageTL: chosenTrack.monetaryValueTL || 0,
+      };
+
+      // Idempotent: a duplicated callback can never double-log the dilemma.
+      setHistory((prev) =>
+        prev.some((e) => e.dilemmaId === entry.dilemmaId) ? prev : [...prev, entry]
+      );
+    }, msUntilStamp);
   }, [decision, currentDilemma]);
 
   const handleNextDilemma = useCallback(() => {
-    playPremiumTransition();
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    playPaper();
     if (currentStep < DILEMMAS.length - 1) {
       setCurrentStep((prev) => prev + 1);
       setDecision(null);
@@ -193,7 +227,12 @@ export default function App() {
   }, [currentStep]);
 
   const handleRestart = useCallback(() => {
-    playPremiumTransition();
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    stopAllCues();
+    playPaper();
     setCurrentStep(0);
     setDecision(null);
     setLeverPulled(false);
@@ -213,7 +252,7 @@ export default function App() {
       const next = route === 'diverted';
       if (next === leverPulled) return;
       setLeverPulled(next);
-      playLeverSnap();
+      playSwitch();
     },
     [isAnimating, showResult, leverPulled]
   );

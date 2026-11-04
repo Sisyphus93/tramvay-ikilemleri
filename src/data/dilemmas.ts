@@ -35,7 +35,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Beş kişi öldü; müdahale etmedin. Modlar çoktan anketi yapıştırdı.",
     "divertedCommentary": "Bir kişiyi feda ederek beş kişiyi kurtardın. Chat faydacı mı çıktı?",
     "chatReaction": "Kontrol grubu: kitlen ne kadar faydacı, ne kadar kararsız?",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   {
     "id": 2,
@@ -61,6 +62,7 @@ export const DILEMMAS: Dilemma[] = [
     "divertedCommentary": "1 iri adamı köprüden ittin; o öldü, beş kişi kurtuldu.",
     "chatReaction": "Chat daha 3. dakikada kendi ahlakıyla çelişti; yüzlerine vurmak aşırı eğlenceli.",
     "twitchEmote": "5HEAD",
+    "mood": "dread",
     "conceptualChoice": true
   },
   {
@@ -86,7 +88,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Beş yabancı öldü, sabotajcı yaşadı.",
     "divertedCommentary": "Sabotajcı öldü, beş yabancı kurtuldu.",
     "chatReaction": "Chat %99 birleşip kötü adamı harcadı; ekranda GIGACHAD spam'ı dönüyor.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "relief",
   },
   {
     "id": 4,
@@ -113,7 +116,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Can tatlıdır! Kolu çekmeyip kenarda durdun. 5 kişi gitti ama sen akşam yemeğine yetiştin.",
     "divertedCommentary": "Kolu çektin ve kendini feda ettin! Gerçek bir efsane gibi davrandın. Saygıyla anılacaksın.",
     "chatReaction": "Chat: \"Felsefeciler şok, kolu tutan adam kendini feda etti o7\"",
-    "twitchEmote": "FEELSGOOD"
+    "twitchEmote": "FEELSGOOD",
+    "mood": "dread",
   },
   // Derin mevzu: yaş, mesafe, bilinç, gelecek, araçsallaştırma
   {
@@ -139,7 +143,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Bebek yaşadı; beş yaşlı insan öldü.",
     "divertedCommentary": "Beş yaşlı insan yaşadı; bebek öldü.",
     "chatReaction": "Geyik bitti: chat 'kalan ömür süresi' ile 'kurulmuş hayatlar ve anılar' üzerinden karanlık matematik yapıyor.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   {
     "id": 6,
@@ -164,7 +169,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Beş kişinin ölümüne tanık oldun.",
     "divertedCommentary": "Beş kişi kurtuldu; dünyanın öbür ucunda hiç görmediğin bir kişi öldü.",
     "chatReaction": "Modern hayatın ikiyüzlülüğü: tıpkı o telefonları üreten görünmez işçiler gibi.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   {
     "id": 7,
@@ -189,7 +195,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "İnsan yaşadı; beş hissedebilen robot yok oldu.",
     "divertedCommentary": "Beş robot kurtuldu; komadaki insan öldü.",
     "chatReaction": "10 bin kişilik chat 'hayat ve bilinç nedir?' diye birbirine girdi; modlar fazla mesai yaptı.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   {
     "id": 8,
@@ -214,7 +221,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Bugünkü kişi öldü; 2400 yılındaki yüz kişi yaşadı.",
     "divertedCommentary": "Bugünkü kişi kurtuldu; 2400 yılındaki yüz kişi öldü.",
     "chatReaction": "Chat 2400 yılını gözünü kırpmadan yok etti; iklim krizi ve 'Boomer' zihniyeti muhabbeti döndü.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   {
     "id": 9,
@@ -239,7 +247,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Beş kişi öldü; tek kişi yaşadı.",
     "divertedCommentary": "Bir kişinin bedeni treni yavaşlattı; o öldü, beş kişi kurtuldu.",
     "chatReaction": "Şişman Adam'da kimse adamı itmek istememişti; burada chat'in beyni yanıyor.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   // Yayın metası: PR, chat, modlar, arkadaşlar, para, setup
   {
@@ -266,6 +275,7 @@ export const DILEMMAS: Dilemma[] = [
     "divertedCommentary": "Beş kişi kurtuldu; dünya seni suçlu sandı. Linç yememek için iyi görünmeyi seçmedin.",
     "chatReaction": "Tam bir influencer testi: gerçekten iyi olmak mı, yoksa sadece iyi PR mı?",
     "twitchEmote": "5HEAD",
+    "mood": "absurd",
     "conceptualChoice": true
   },
   {
@@ -291,7 +301,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Evcil hayvanın yaşadı, yabancı insan öldü.",
     "divertedCommentary": "Yabancı insan yaşadı, evcil hayvanın öldü.",
     "chatReaction": "Chat %50-%50 bölündü: hangi tarafı seçersen seç, seni psikopat ilan edecek.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   {
     "id": 12,
@@ -316,7 +327,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Baş modun yaşadı, beş izleyici öldü.",
     "divertedCommentary": "Beş izleyici yaşadı, baş modun öldü.",
     "chatReaction": "Modlar soğuk ter dökerken: 'Hangi mod 5 izleyici feda etmeye değer, hangisi yatarak maaş alıyor?'",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   {
     "id": 13,
@@ -341,7 +353,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Arkadaşın yaşadı; beş yabancı öldü. Chat sana 'simp' veya 'yalaka' dedi.",
     "divertedCommentary": "Beş yabancı yaşadı; arkadaşın öldü. Klip yarın kendi yayınında tepki alacak.",
     "chatReaction": "İçerik açısından her türlü kazan-kazan: tatlı drama ya da 'simp' / 'yalaka' spam'ı.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "dread",
   },
   {
     "id": 14,
@@ -366,7 +379,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Beş 'pleb' öldü, 'balina' yaşadı. Yayıncının savunmaları zirve mizah.",
     "divertedCommentary": "Beş izleyici yaşadı, 'balina' öldü.",
     "chatReaction": "5 'pleb' yerine 1 'balinayı' kurtarma savunmaları YouTube Shorts ve TikTok'luk kesit.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   {
     "id": 15,
@@ -391,7 +405,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Setup kurtuldu ama yabancı öldü. Chat seni kötü kalpli canavar ilan etmek için bait'ledi.",
     "divertedCommentary": "Yabancı kurtuldu; yayın odan ve bilgisayarın dümdüz oldu.",
     "chatReaction": "Chat sırf seni kötü kalpli bir canavar gibi göstermek için PC'Yİ KURTAR diye spam yapıyor.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   // Ego ve açgözlülük: rüşvet, klon, IQ, GTA 6
   {
@@ -417,7 +432,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Beş kişi öldü; parayı almadın.",
     "divertedCommentary": "Bir kişi öldü; beş kişi kurtuldu ve 1 Milyon Dolar aldın.",
     "chatReaction": "100 bin dolar? 10 bin? 1 hediye abonelik? Chat cinayetin tam fiyat etiketini buluyor.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   {
     "id": 17,
@@ -442,7 +458,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Klonun yaşadı; beş yabancı öldü. Chat devasa egonla dalga geçiyor.",
     "divertedCommentary": "Beş yabancı yaşadı; klonun öldü. Chat özgüvensizliğinle dalga geçiyor.",
     "chatReaction": "Her türlü zorbalanacaksın: klonu öldürürsen özgüvensiz, kurtarırsan narsist.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   {
     "id": 18,
@@ -468,6 +485,7 @@ export const DILEMMAS: Dilemma[] = [
     "divertedCommentary": "Beş kişi kurtuldu. Hayatta kaldın ama IQ'n 40 puan düştü.",
     "chatReaction": "Chat anında yapıştırdı: 'Abi sana bu tren yıllar önce çarpmış zaten'.",
     "twitchEmote": "5HEAD",
+    "mood": "absurd",
     "conceptualChoice": true
   },
   {
@@ -493,7 +511,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Sandık kurtuldu; bir canlı insan öldü. Chat GTA 6 için o adamı %100 harcadı.",
     "divertedCommentary": "İnsan kurtuldu; Mona Lisa, kelliğin çaresi ve GTA 6'nın kaynak kodları yok oldu.",
     "chatReaction": "Klasik 'Sanat/Bilim mi, İnsan Hayatı mı?' sorusunun oyuncu/internet kitlesine uyarlanmış hali.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
   },
   // Türk internet absürtlüğü: Steam, taksi, notçu, kanka, dizi, fiber
   {
@@ -521,7 +540,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Steam kütüphaneni kurtardın ama insanlığını kaybettin. O dolara geçmeden önceki fiyatlar bir daha geri gelmezdi zaten.",
     "divertedCommentary": "Kolu çektin ve 800 oyunluk kütüphanen silindi. Gaben arkandan baktı, ama 4 insan hayatta kaldı.",
     "chatReaction": "Chat: \"Dolara geçtikten sonra o kütüphane milli servetti be abi KEKW\"",
-    "twitchEmote": "SADGE"
+    "twitchEmote": "SADGE",
+    "mood": "absurd",
   },
   {
     "id": 21,
@@ -548,7 +568,9 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Kolu ellemedin ve tramvay sarı taksiyi biçti. İstanbul halkı içten içe derin bir \"oh\" çekti.",
     "divertedCommentary": "Kolu çektin ve taksiciyi kurtarıp 5 TAG yolcusunu feda ettin. Taksici sana \"kısa mesafe almam\" diyip bastı gitti.",
     "chatReaction": "Chat: \"Karşıya geçmem diyen taksicinin tramvay karşısındaki dramı KEKW\"",
-    "twitchEmote": "KEKW"
+    "twitchEmote": "KEKW",
+    "mood": "absurd",
+    "comic": true,
   },
   {
     "id": 22,
@@ -575,7 +597,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Notçuyu korudun! 5 tembel gitti ama amfinin geleceği ve çan eğrisi kurtuldu.",
     "divertedCommentary": "Kolu çektin ve çalışkan notçuyu ezdin. 5 tembel kurtuldu ama sabahki sınavda herkes bomboş kağıt verdi.",
     "chatReaction": "Chat: \"Not çıkaran adam kutsaldır abi, ona dokunan taş olur LUL\"",
-    "twitchEmote": "LUL"
+    "twitchEmote": "LUL",
+    "mood": "absurd",
   },
   {
     "id": 23,
@@ -602,7 +625,9 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Kankanı korudun. O terfi maçı kaybedildi, elo cehennemine düştün ama dostluk baki kaldı.",
     "divertedCommentary": "Kolu çektin ve kolsuz kankanı feda ettin. Hem 3 kişi kurtuldu hem de maçın LP’si geri geldi.",
     "chatReaction": "Chat: \"0/15 giden adam tramvayı hak etmiştir beyler tartışmayalım KEKW\"",
-    "twitchEmote": "KEKW"
+    "twitchEmote": "KEKW",
+    "mood": "absurd",
+    "comic": true,
   },
   {
     "id": 24,
@@ -629,7 +654,9 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "\"Sonunu düşünen kahraman olamaz\" dedin, kaseti koruyup 4 kişiyi feda ettin. Polat Alemdar selam durdu.",
     "divertedCommentary": "Kolu çektin ve ilk 97 bölüm tarihe gömüldü. Artık sadece 360p piksel piksel YouTube yüklemeleriyle idare edeceğiz.",
     "chatReaction": "Chat: \"Dostum olmaz, hasmım yaşamaz dedin kasedi feda ettin KEKW\"",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
+    "comic": true,
   },
   {
     "id": 25,
@@ -656,7 +683,8 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "İnterneti kurtardın! 4 kişi gitti ama 85 milyon insan kesintisiz video izlemeye devam etti.",
     "divertedCommentary": "Kolu çektin ve fiber hat koptu! Tüm Türkiye internetsiz kaldı, millet sokağa çıkıp birbirini tanıdı ama 4 insan yaşıyor.",
     "chatReaction": "Chat: \"Ping 999 olacağına feda ettik abi şaka bir yana büyük fedakarlık KEKW\"",
-    "twitchEmote": "POG"
+    "twitchEmote": "POG",
+    "mood": "absurd",
   },
   // Tam kaos ve final: kickflip ve yayını kapatma
   {
@@ -682,7 +710,9 @@ export const DILEMMAS: Dilemma[] = [
     "straightCommentary": "Ana raydaki beş kişi öldü; kickflip olmadı.",
     "divertedCommentary": "Yan raydaki beş kişi öldü; tramvay havada efsane bir kickflip attı.",
     "chatReaction": "Trial by Trolley / Neal.fun esintisi: chat kesinlikle EVET oyu verecek.",
-    "twitchEmote": "5HEAD"
+    "twitchEmote": "5HEAD",
+    "mood": "absurd",
+    "comic": true,
   },
   {
     "id": 27,
@@ -708,6 +738,7 @@ export const DILEMMAS: Dilemma[] = [
     "divertedCommentary": "Kurgusal karakterler kurtuldu. Tek kelime etmeden kolu çekip yayını şak diye kapattın.",
     "chatReaction": "Artık chat için gerçek bir bedel var: kendi eğlenceleri mi, yayını kapatma meme'i mi?",
     "twitchEmote": "5HEAD",
+    "mood": "relief",
     "conceptualChoice": true
   }
 ];
