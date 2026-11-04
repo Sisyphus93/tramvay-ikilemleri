@@ -15,6 +15,7 @@ interface TrolleyHeaderProps {
   onToggleSound: () => void;
   onRestart: () => void;
   isPlaying: boolean;
+  showRestart?: boolean;
 }
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -27,6 +28,7 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
   onToggleSound,
   onRestart,
   isPlaying,
+  showRestart,
 }) => {
   const reduceMotion = useReducedMotion();
   const progress = isPlaying ? ((currentStep + 1) / totalSteps) * 100 : 0;
@@ -77,7 +79,7 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
             <span className="hidden sm:inline">{soundEnabled ? 'Ses' : 'Sessiz'}</span>
           </button>
 
-          {isPlaying && (
+          {(isPlaying || showRestart) && (
             <button
               onClick={onRestart}
               data-hover-sound

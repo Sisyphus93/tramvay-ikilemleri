@@ -295,6 +295,7 @@ export default function App() {
         onToggleSound={toggleSound}
         onRestart={handleRestart}
         isPlaying={gameState === 'PLAYING'}
+        showRestart={gameState !== 'TITLE'}
       />
 
       <main className="screen-main">
