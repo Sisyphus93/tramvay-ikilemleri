@@ -15,6 +15,7 @@ interface TrolleyHeaderProps {
   onToggleSound: () => void;
   onRestart: () => void;
   isPlaying: boolean;
+  showRestart?: boolean;
 }
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -27,6 +28,7 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
   onToggleSound,
   onRestart,
   isPlaying,
+  showRestart,
 }) => {
   const reduceMotion = useReducedMotion();
   const progress = isPlaying ? ((currentStep + 1) / totalSteps) * 100 : 0;
@@ -44,17 +46,17 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
         </div>
 
         {isPlaying && (
-          <div className="header-meters">
+          <div className="header-meters" aria-label="Oyun durumu">
             <span className="meter">
-              İkilem
+              <span className="meter__label">İkilem</span>
               <span className="meter__value numeral">
                 {currentStep + 1}
-                <span style={{ color: 'var(--muted)', fontWeight: 400 }}> / {totalSteps}</span>
+                <span className="meter__total"> / {totalSteps}</span>
               </span>
             </span>
             <span className="meter__divider" />
             <span className="meter">
-              Zayiat
+              <span className="meter__label">Zayiat</span>
               <span className="meter__value numeral meter__value--bad">{totalDeaths}</span>
             </span>
           </div>
@@ -77,7 +79,7 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
             <span className="hidden sm:inline">{soundEnabled ? 'Ses' : 'Sessiz'}</span>
           </button>
 
-          {isPlaying && (
+          {(isPlaying || showRestart) && (
             <button
               onClick={onRestart}
               data-hover-sound

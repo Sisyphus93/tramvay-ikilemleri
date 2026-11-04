@@ -31,20 +31,43 @@ type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 /**
- * Dilemmas read as "setup. question?" — splitting them lets the question
- * carry the visual weight instead of one undifferentiated paragraph.
+ * Dilemmas read as "setup. question?" or "setup: prompt." — splitting them
+ * lets the final ask carry the visual weight while preserving original punctuation.
  */
 const splitQuestion = (question: string): { setup: string; ask: string } => {
   const normalized = question.trim();
-  const inner = normalized.endsWith('?') ? normalized.slice(0, -1) : normalized;
-  const cut = inner.lastIndexOf('. ');
-  const colon = inner.lastIndexOf(': ');
 
-  if (cut > 20 && cut > colon) {
-    return { setup: `${inner.slice(0, cut + 1)}`, ask: `${inner.slice(cut + 2)}?` };
+  let cut = -1;
+  for (const match of normalized.matchAll(/\.\s+/g)) {
+    const idx = match.index ?? -1;
+    if (idx < 0) continue;
+    const before = normalized.slice(0, idx);
+    if (/\bvs$/i.test(before) || /\d+$/.test(before)) continue;
+    cut = idx;
   }
-  if (colon > 20) {
-    return { setup: '', ask: normalized };
+
+  let colon = -1;
+  let parenDepth = 0;
+  for (let i = 0; i < normalized.length - 1; i++) {
+    const ch = normalized[i];
+    if (ch === '(') parenDepth++;
+    else if (ch === ')' && parenDepth > 0) parenDepth--;
+    else if (parenDepth === 0 && ch === ':' && normalized[i + 1] === ' ') {
+      colon = i;
+    }
+  }
+
+  if (colon > 20 && colon > cut) {
+    return {
+      setup: normalized.slice(0, colon + 1),
+      ask: normalized.slice(colon + 2),
+    };
+  }
+  if (cut > 20) {
+    return {
+      setup: normalized.slice(0, cut + 1),
+      ask: normalized.slice(cut + 2),
+    };
   }
   return { setup: '', ask: normalized };
 };
@@ -272,6 +295,7 @@ export default function App() {
         onToggleSound={toggleSound}
         onRestart={handleRestart}
         isPlaying={gameState === 'PLAYING'}
+        showRestart={gameState !== 'TITLE'}
       />
 
       <main className="screen-main">
@@ -284,118 +308,81 @@ export default function App() {
             )}
 
             {gameState === 'PLAYING' && (
-              <motion.div key="playing" {...screenMotion} className="w-full">
+              <motion.div
+                key="playing"
+                {...screenMotion}
+                className={`turn-shell w-full ${showResult ? 'turn-shell--result' : ''}`}
+              >
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.div key={currentStep} {...stepMotion} className="w-full">
+                  <motion.div
+                    key={currentStep}
+                    {...stepMotion}
+                    className={`turn-step w-full ${showResult ? 'turn-step--result' : ''}`}
+                  >
                     <section className={`q ${showResult ? 'q--result' : ''}`}>
                       <div className="q__topline">
-                        <span className="q__step">
-                          İkilem <b className="numeral">{currentStep + 1}</b> / {DILEMMAS.length}
+                        <span className="q__chapter" aria-live="polite">
+                          {chapterTitle}
                         </span>
+                        {!showResult && currentDilemma.conceptualChoice && (
+                          <span className="q__note-inline">
+                            Sembolik sahne · sonuçlar senaryoya göredir
+                          </span>
+                        )}
                       </div>
 
-                      <h1 className="q__title" aria-live="polite">
-                        {chapterTitle}
-                      </h1>
-
                       {!showResult && (
-                        <>
-                          <p className="q__statement" aria-live="polite">
-                            {setup && <span className="q__setup">{setup} </span>}
-                            <span className="q__ask">{ask}</span>
-                          </p>
-
-                          {currentDilemma.conceptualChoice && (
-                            <p className="q__note">
-                              Sahne seçimleri sembolik olarak gösterir; sonuçlar yukarıdaki
-                              senaryoya göredir.
-                            </p>
-                          )}
-                        </>
+                        <h1 className="q__statement" aria-live="polite">
+                          {setup && <span className="q__setup">{setup} </span>}
+                          <span className="q__ask">{ask}</span>
+                        </h1>
                       )}
                     </section>
 
                     {!showResult && (
-                    <div className="board">
-                      <div className="board__head">
-                        <span>
-                          <span className="board__id">Plan {currentStep + 1}</span>
-                          {' · '}Makas Şeması
-                        </span>
-                        <span className="board__hint">[Boşluk] makası çevir</span>
-                      </div>
+                      <div className="board">
+                        <div className="board__stage">
+                          <TrolleyCanvas
+                            dilemma={currentDilemma}
+                            decision={decision}
+                            isAnimating={isAnimating}
+                            onAnimationEnd={handleAnimationEnd}
+                            leverPulled={leverPulled}
+                            onLeverToggle={handleLeverToggle}
+                          />
+                        </div>
 
-                      <div className="board__stage">
-                        <TrolleyCanvas
-                          dilemma={currentDilemma}
-                          decision={decision}
-                          isAnimating={isAnimating}
-                          onAnimationEnd={handleAnimationEnd}
-                          leverPulled={leverPulled}
-                          onLeverToggle={handleLeverToggle}
-                        />
-                      </div>
-
-                      <div className="board__legend">
-                        <span className="legend-item">
-                          <span className="legend-swatch" aria-hidden="true" />
-                          Düz hat
-                        </span>
-                        <span className="legend-item">
-                          <span className="legend-swatch legend-swatch--alt" aria-hidden="true" />
-                          Makas hattı
-                        </span>
-                        <span className="legend-state">
-                          Aktif: {leverPulled ? 'Makas' : 'Düz'}
-                        </span>
-                      </div>
-
-                      <div className="routes">
-                        <button
-                          type="button"
-                          onClick={() => onSelectRoute('straight')}
-                          disabled={isAnimating}
-                          title={currentDilemma.straightTrack.label}
-                          data-hover-sound
-                          className={`route ${!leverPulled ? 'route--active' : ''}`}
-                        >
-                          <span className="route__tick" aria-hidden="true" />
-                          <span className="route__body">
-                            <span className="route__kicker">
-                              <span className="route__dot" aria-hidden="true" />
+                        <div className="board__legend">
+                          <div className="board__legend-routes" role="group" aria-label="Hat önizlemesi">
+                            <button
+                              type="button"
+                              onClick={() => onSelectRoute('straight')}
+                              disabled={isAnimating}
+                              data-hover-sound
+                              aria-pressed={!leverPulled}
+                              className={`legend-toggle ${!leverPulled ? 'legend-toggle--active' : ''}`}
+                            >
+                              <span className="legend-swatch" aria-hidden="true" />
                               Düz hat
-                            </span>
-                            <span className="route__name">{currentDilemma.straightTrack.label}</span>
-                          </span>
-                          <span className="route__count numeral">
-                            ×{currentDilemma.straightTrack.count}
-                            <span>{currentDilemma.straightTrack.count === 1 ? 'hedef' : 'canlı'}</span>
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => onSelectRoute('diverted')}
-                          disabled={isAnimating}
-                          title={currentDilemma.divertedTrack.label}
-                          data-hover-sound
-                          className={`route route--alt ${leverPulled ? 'route--active' : ''}`}
-                        >
-                          <span className="route__tick" aria-hidden="true" />
-                          <span className="route__body">
-                            <span className="route__kicker">
-                              <span className="route__dot" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onSelectRoute('diverted')}
+                              disabled={isAnimating}
+                              data-hover-sound
+                              aria-pressed={leverPulled}
+                              className={`legend-toggle legend-toggle--alt ${leverPulled ? 'legend-toggle--active' : ''}`}
+                            >
+                              <span className="legend-swatch legend-swatch--alt" aria-hidden="true" />
                               Makas hattı
+                            </button>
+                            <span className="legend-state">
+                              Aktif: {leverPulled ? 'Makas' : 'Düz'}
                             </span>
-                            <span className="route__name">{currentDilemma.divertedTrack.label}</span>
-                          </span>
-                          <span className="route__count numeral">
-                            ×{currentDilemma.divertedTrack.count}
-                            <span>{currentDilemma.divertedTrack.count === 1 ? 'hedef' : 'canlı'}</span>
-                          </span>
-                        </button>
+                          </div>
+                          <span className="board__hint">[Boşluk] makası çevir</span>
+                        </div>
                       </div>
-                    </div>
                     )}
 
                     <AnimatePresence mode="wait" initial={false}>

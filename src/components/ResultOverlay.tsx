@@ -91,7 +91,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
                   clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
                 }}
               />
-              <span>{dilemma.conceptualChoice ? 'Sonuç' : 'Feda edilen'}</span>
+              <span>Feda edilen</span>
             </div>
             <div className="verdict__col-name">{lostTarget.label}</div>
             <p className="verdict__col-desc">{lostTarget.description}</p>
@@ -105,7 +105,7 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
         <motion.div variants={item} className="verdict__chat">
           <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" strokeWidth={2.2} />
           <span>
-            <b>Sohbet:</b> {dilemma.chatReaction}
+            <b>Sohbet:</b> {dilemma.chatReaction.replace(/^Chat:\s*/i, '')}
           </span>
         </motion.div>
 
