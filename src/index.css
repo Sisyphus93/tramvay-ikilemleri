@@ -700,6 +700,8 @@ main.screen-main {
 
 .stat__unit { font-size: var(--fs-small); font-weight: 400; color: var(--muted); margin-left: 5px; }
 
+.stat__sub { font-size: var(--fs-small); color: var(--muted); margin-top: 4px; }
+
 /* Ledger: the product's own 27 rows, opened and readable. */
 .ledger { border-radius: var(--radius-card); background: var(--border); overflow: hidden; margin-bottom: 24px; }
 

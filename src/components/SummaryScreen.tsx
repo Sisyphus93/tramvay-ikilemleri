@@ -38,6 +38,16 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
   const totalLeverPulls = history.filter((h) => h.leverPulled).length;
+  const switchEntries = history.filter(
+    (h) => !DILEMMAS.find((d) => d.id === h.dilemmaId)?.conceptualChoice
+  );
+  const conceptualEntries = history.filter(
+    (h) => DILEMMAS.find((d) => d.id === h.dilemmaId)?.conceptualChoice
+  );
+  const switchPulls = switchEntries.filter((h) => h.leverPulled).length;
+  const switchPasses = switchEntries.length - switchPulls;
+  const conceptualActive = conceptualEntries.filter((h) => h.leverPulled).length;
+  const conceptualDefault = conceptualEntries.length - conceptualActive;
 
   const getArchetype = () => {
     const leverPullRatio = totalLeverPulls / DILEMMAS.length;
@@ -159,18 +169,24 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         </div>
 
         <div className="stat">
-          <div className="stat__label">Kolu çekti</div>
+          <div className="stat__label">Müdahale etti</div>
           <div className="stat__value">
             {totalLeverPulls}
             <span className="stat__unit">kez</span>
           </div>
+          <div className="stat__sub">
+            {switchPulls} makas · {conceptualActive} kavramsal
+          </div>
         </div>
 
         <div className="stat">
-          <div className="stat__label">Hiçbir şey yapmadı</div>
+          <div className="stat__label">Müdahale etmedi</div>
           <div className="stat__value">
-            {DILEMMAS.length - totalLeverPulls}
+            {history.length - totalLeverPulls}
             <span className="stat__unit">kez</span>
+          </div>
+          <div className="stat__sub">
+            {switchPasses} düz hat · {conceptualDefault} kavramsal
           </div>
         </div>
       </motion.div>
@@ -217,9 +233,11 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
                     </div>
                   </div>
                   <div className="ledger__outcome">
-                    <span className="ledger__save">Kurtarılan: {savedTarget.label}</span>
+                    <span className="ledger__save">
+                      {dilemma.conceptualChoice ? 'Korunan' : 'Kurtarılan'}: {savedTarget.label}
+                    </span>
                     <span className={h.humanDeaths > 0 ? 'ledger__lose ledger__lose--cost' : 'ledger__lose'}>
-                      {dilemma.conceptualChoice ? 'Sonuç' : 'Feda edilen'}: {lostTarget.label}
+                      Feda edilen: {lostTarget.label}
                     </span>
                   </div>
                 </div>

@@ -372,12 +372,12 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           </g>
 
           {/* Junction switch */}
-          <g>
-            <circle cx={JUNCTION_X} cy={RAIL_Y} r="10" fill={PAPER} stroke={INK} strokeWidth="3" />
+          <g transform={`translate(${JUNCTION_X}, ${RAIL_Y})`}>
+            <circle cx="0" cy="0" r="10" fill={PAPER} stroke={INK} strokeWidth="3" />
             <g className="blueprint-switch__blade-group" style={{ transform: `rotate(${leverPulled ? 11 : -11}deg)` }}>
-              <line x1={JUNCTION_X} y1={RAIL_Y} x2={JUNCTION_X + 52} y2={RAIL_Y} stroke={INK} strokeWidth="5" strokeLinecap="round" />
+              <line x1="0" y1="0" x2="52" y2="0" stroke={INK} strokeWidth="5" strokeLinecap="round" />
             </g>
-            <circle cx={JUNCTION_X} cy={RAIL_Y} r="3.5" fill={INK} />
+            <circle cx="0" cy="0" r="3.5" fill={INK} />
           </g>
 
           {/* Targets */}
@@ -452,13 +452,14 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             <circle cx="66" cy="-2" r="6" fill={PAPER} stroke={INK} strokeWidth="2.2" />
 
             {/* Route badge */}
-            <rect x="-62" y="21" width="38" height="14" rx="2" fill={INK} />
+            <rect x="-18" y="12" width="36" height="15" rx="2" fill={INK} />
             <text
-              x="-43"
-              y="32"
+              x="0"
+              y="19.5"
+              dominantBaseline="central"
               textAnchor="middle"
               fill={PAPER}
-              style={{ fontFamily: 'Archivo, sans-serif', fontSize: 13, fontWeight: 700 }}
+              style={{ fontFamily: 'Archivo, sans-serif', fontSize: 12, fontWeight: 700 }}
             >
               27
             </text>

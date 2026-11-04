@@ -456,10 +456,10 @@ export const DILEMMAS: Dilemma[] = [
       "isHuman": true
     },
     "divertedTrack": {
-      "label": "Sen: IQ -40",
+      "label": "40 IQ puanın",
       "count": 1,
       "entityType": "yourself",
-      "description": "Tren sana çarpıyor; hayattasın ama IQ'n 40 puan düşüyor",
+      "description": "Tren sana çarpınca kaybedeceğin 40 IQ puanı",
       "isHuman": false
     },
     "straightActionLabel": "Kendini koru",
@@ -696,10 +696,10 @@ export const DILEMMAS: Dilemma[] = [
       "isHuman": false
     },
     "divertedTrack": {
-      "label": "Yayının devamı (kapatılacak)",
+      "label": "Yayının devamı",
       "count": 1,
       "entityType": "streamer",
-      "description": "Kurtarınca sona erecek yayın",
+      "description": "Yayını kapatmadan sürdürme şansın",
       "isHuman": false
     },
     "straightActionLabel": "Karakterleri bırak, yayına devam et",

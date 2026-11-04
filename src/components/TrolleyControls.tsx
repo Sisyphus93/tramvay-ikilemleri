@@ -28,11 +28,11 @@ export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
   const hoverTransition = reduceMotion ? { duration: 0 } : { duration: 0.22, ease: EASE };
 
   const straightDesc = dilemma.conceptualChoice
-    ? `Sonuç: ${dilemma.straightTrack.label}`
+    ? `Feda edilen: ${dilemma.straightTrack.label}`
     : `${dilemma.straightTrack.label} hedefte kalır.`;
 
   const divertedDesc = dilemma.conceptualChoice
-    ? `Sonuç: ${dilemma.divertedTrack.label}`
+    ? `Feda edilen: ${dilemma.divertedTrack.label}`
     : `${dilemma.divertedTrack.label} hedef olur.`;
 
   return (

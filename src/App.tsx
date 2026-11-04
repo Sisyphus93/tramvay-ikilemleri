@@ -31,20 +31,43 @@ type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 /**
- * Dilemmas read as "setup. question?" — splitting them lets the question
- * carry the visual weight instead of one undifferentiated paragraph.
+ * Dilemmas read as "setup. question?" or "setup: prompt." — splitting them
+ * lets the final ask carry the visual weight while preserving original punctuation.
  */
 const splitQuestion = (question: string): { setup: string; ask: string } => {
   const normalized = question.trim();
-  const inner = normalized.endsWith('?') ? normalized.slice(0, -1) : normalized;
-  const cut = inner.lastIndexOf('. ');
-  const colon = inner.lastIndexOf(': ');
 
-  if (cut > 20 && cut > colon) {
-    return { setup: `${inner.slice(0, cut + 1)}`, ask: `${inner.slice(cut + 2)}?` };
+  let cut = -1;
+  for (const match of normalized.matchAll(/\.\s+/g)) {
+    const idx = match.index ?? -1;
+    if (idx < 0) continue;
+    const before = normalized.slice(0, idx);
+    if (/\bvs$/i.test(before) || /\d+$/.test(before)) continue;
+    cut = idx;
   }
-  if (colon > 20) {
-    return { setup: '', ask: normalized };
+
+  let colon = -1;
+  let parenDepth = 0;
+  for (let i = 0; i < normalized.length - 1; i++) {
+    const ch = normalized[i];
+    if (ch === '(') parenDepth++;
+    else if (ch === ')' && parenDepth > 0) parenDepth--;
+    else if (parenDepth === 0 && ch === ':' && normalized[i + 1] === ' ') {
+      colon = i;
+    }
+  }
+
+  if (colon > 20 && colon > cut) {
+    return {
+      setup: normalized.slice(0, colon + 1),
+      ask: normalized.slice(colon + 2),
+    };
+  }
+  if (cut > 20) {
+    return {
+      setup: normalized.slice(0, cut + 1),
+      ask: normalized.slice(cut + 2),
+    };
   }
   return { setup: '', ask: normalized };
 };
@@ -369,7 +392,7 @@ export default function App() {
                           </span>
                           <span className="route__count numeral">
                             ×{currentDilemma.straightTrack.count}
-                            <span>{currentDilemma.straightTrack.count === 1 ? 'hedef' : 'canlı'}</span>
+                            <span>{currentDilemma.straightTrack.isHuman ? 'canlı' : 'hedef'}</span>
                           </span>
                         </button>
 
@@ -391,7 +414,7 @@ export default function App() {
                           </span>
                           <span className="route__count numeral">
                             ×{currentDilemma.divertedTrack.count}
-                            <span>{currentDilemma.divertedTrack.count === 1 ? 'hedef' : 'canlı'}</span>
+                            <span>{currentDilemma.divertedTrack.isHuman ? 'canlı' : 'hedef'}</span>
                           </span>
                         </button>
                       </div>
