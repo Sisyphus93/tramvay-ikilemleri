@@ -501,7 +501,7 @@ function synthPaper(name, durationSec) {
     const attack = Math.min(1, t / 0.035);
     const tail = Math.min(1, Math.max(0, (durationSec - t) / 0.06));
     const texture = Math.min(1.05, 0.20 + slow + grains[i] * 0.9);
-    out[i] = (high[i] * 0.34 * texture + body[i] * 0.40 * (0.38 + grains[i] * 0.2)) * attack * tail;
+    out[i] = (high[i] * 0.34 * texture + body[i] * 0.65 * (0.38 + grains[i] * 0.2)) * attack * tail;
   }
   return finalizeSfx(roomReverb(out, SAMPLE_RATE, 0.085), -9, 0.018);
 }
