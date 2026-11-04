@@ -27,6 +27,7 @@ import {
   fadeOutOutcome,
   stopAllCues,
   armAmbience,
+  disarmAmbience,
 } from './utils/audio.ts';
 import { getTramAnimationSeconds, TramRun } from './components/TrolleyCanvas.tsx';
 
@@ -290,6 +291,8 @@ export default function App() {
     // after it started, so restart was silent
     fadeOutOutcome();
     stopAllCues();
+    // the bed must not keep looping on the title screen we are returning to
+    disarmAmbience();
     playPaper();
     setCurrentStep(0);
     setDecision(null);

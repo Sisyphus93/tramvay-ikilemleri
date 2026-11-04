@@ -665,9 +665,11 @@ export const unlockAudio = (): Promise<void> => {
  * ------------------------------------------------------------------ */
 
 let ambienceSource: AudioBufferSourceNode | null = null;
-let ambienceTimer: ReturnType<typeof setTimeout> | null = null;
 /** the bed only runs once the game has started (never on the landing page) */
 let ambienceArmed = false;
+
+/** How long disarmAmbience takes to fade the bed out. A hard cut clicks. */
+const AMBIENCE_FADE_OUT = 0.25;
 
 function startAmbience(): void {
   if (!engine || !engine.ambienceBuffer) return;
@@ -714,6 +716,35 @@ function restoreAmbience(seconds = 2): void {
 export const armAmbience = (): void => {
   ambienceArmed = true;
   startAmbience();
+};
+
+/**
+ * Disarm the bed and stop it. Called on restart.
+ *
+ * Nothing enforced the "never on the landing page" comment above: the source
+ * was started and never stopped, and ambienceArmed was never cleared, so the
+ * bed kept looping on the title screen after a restart — and stopAllCues() ends
+ * by restoring it to full level.
+ */
+export const disarmAmbience = (): void => {
+  ambienceArmed = false;
+  const src = ambienceSource;
+  ambienceSource = null;
+  if (!engine || !src) return;
+  const { ctx, ambienceBus } = engine;
+  try {
+    const now = ctx.currentTime;
+    ambienceBus.gain.cancelScheduledValues(now);
+    ambienceBus.gain.setValueAtTime(Math.max(0.0001, ambienceBus.gain.value), now);
+    ambienceBus.gain.linearRampToValueAtTime(0.0001, now + AMBIENCE_FADE_OUT);
+    src.stop(now + AMBIENCE_FADE_OUT);
+  } catch {
+    try {
+      src.stop();
+    } catch {
+      /* ignore */
+    }
+  }
 };
 
 /* ------------------------------------------------------------------ *
