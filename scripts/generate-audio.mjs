@@ -112,10 +112,10 @@ const applyEnv = (x, fn) => {
 /* Filters (RBJ biquads + one-pole)                                    */
 /* ------------------------------------------------------------------ */
 
-function biquad(type, freq, Q = 0.7071, gainDb = 0) {
-  const nyq = SR / 2;
+function biquad(type, freq, Q = 0.7071, gainDb = 0, sampleRate = SR) {
+  const nyq = sampleRate / 2;
   const f = Math.min(Math.max(freq, 10), nyq * 0.98);
-  const w0 = (2 * Math.PI * f) / SR;
+  const w0 = (2 * Math.PI * f) / sampleRate;
   const cw = Math.cos(w0);
   const sw = Math.sin(w0);
   const alpha = sw / (2 * Math.max(Q, 0.0001));
@@ -520,13 +520,13 @@ function encodeWav(samples, sampleRate) {
 /* Loudness (ITU-R BS.1770 style, K-weighted, gated)                    */
 /* ------------------------------------------------------------------ */
 
-const kWeight = (x) => {
-  const shelf = applyBiquad(x, biquad('highshelf', 1500, 0.7071752, 4));
-  return applyBiquad(shelf, biquad('highpass', 38, 0.500327));
+const kWeight = (x, sampleRate) => {
+  const shelf = applyBiquad(x, biquad('highshelf', 1500, 0.7071752, 4, sampleRate));
+  return applyBiquad(shelf, biquad('highpass', 38, 0.500327, 0, sampleRate));
 };
 
-function integratedLoudness(x) {
-  const y = kWeight(x);
+function integratedLoudness(x, sampleRate = SR) {
+  const y = kWeight(x, sampleRate);
   const blockLen = Math.round(0.4 * SR);
   const hop = Math.round(0.1 * SR);
   const blocks = [];
@@ -598,14 +598,14 @@ function press(rng) {
 function hover(rng, variant) {
   const out = B(0.05);
   const tick = v(rng, 3200, 0.04) + variant * 180;
-  add(out, noiseBurst(rng, 0.008, { hp: 1600, hpQ: 0.7, attack: 0.00025, tau: 0.0011, amp: 0.5 }), 0);
+  add(out, noiseBurst(rng, 0.008, { hp: 950, hpQ: 0.7, lp: 5200, attack: 0.00025, tau: 0.0011, amp: 0.5, peakNorm: 0.55 }), 0);
   // faint damped resonance, different per variant
   add(out, dampedSine(tick, 0.006, 0.4, 0.05, { attack: 0.0003 }), vd(rng, 0.0004, 0.0003));
   add(out, dampedSine(v(rng, 2200, 0.05) + variant * 120, 0.004, 0.24, 0.04, { attack: 0.0002 }), 0.0);
   // almost no tail: it should feel like a switch under glass
   add(out, reverbSend(out, { wet: 0.08, size: 0.25, decay: 0.45, damp: 0.6, predelay: 0.002 }), 0.001);
   fitLength(out, 0.05);
-  return dcBlock(softClip(fadeEdges(out, 0.0002, 0.008), 1.1));
+  return dcBlock(softClip(fadeEdges(lowpass(out, 6000, 0.7), 0.0002, 0.008), 1.1));
 }
 
 /** Two-stage toggle: "tk-clack" with metal contact resonances. */
@@ -708,14 +708,20 @@ function bell(rng) {
   const baseAmps = [0.8, 0.5, 0.4, 0.22, 0.1];
   const taus = [0.92, 0.62, 0.44, 0.26, 0.16];
   const detune = 1 + (rng() * 2 - 1) * 0.0015;
-  const strikePhases = ratios.map(() => rng() * 6.28);
+  // A real strike excites every mode in phase; random phases would smear the
+  // attack and let a later beat become the loudest moment of the bell.
+  const strikePhases = ratios.map((_, i) => i * 0.03);
   const strikes = [
     { t: 0, gain: 1, partialScale: 1 },
     { t: vd(rng, 0.18, 0.012), gain: 0.72, partialScale: 1.004 },
   ];
   for (const s of strikes) {
     // 2 ms noise strike transient, bright but brief
-    add(out, noiseBurst(rng, 0.012, { hp: 3200, attack: 0.0002, tau: 0.0018, amp: 0.34 * s.gain }), s.t);
+    add(
+      out,
+      noiseBurst(rng, 0.012, { hp: 3200, attack: 0.0002, tau: 0.0018, amp: 0.34 * s.gain, peakNorm: 0.45 * s.gain }),
+      s.t
+    );
     addModal(
       out,
       s.t,
@@ -723,7 +729,7 @@ function bell(rng) {
         freq: f0 * r * detune * s.partialScale,
         amp: baseAmps[i] * s.gain * v(rng, 1, 0.1),
         tau: taus[i] * v(rng, 1, 0.12),
-        phase: strikePhases[i] + rng() * 0.4,
+        phase: strikePhases[i],
       }))
     );
   }
@@ -738,7 +744,7 @@ function bell(rng) {
 function airBrake(rng) {
   const out = B(0.8);
   const raw = white(Math.round(0.8 * SR), rng);
-  const tilt = biquadTV(raw, 'highpass', (t) => 950 + 1250 * Math.min(1, t / 0.22), 0.85);
+  const tilt = biquadTV(raw, 'highpass', (t) => 800 + 800 * Math.min(1, t / 0.22), 0.85);
   applyEnv(tilt, (t) => {
     const attack = Math.min(1, t / 0.018);
     const hold = t < 0.16 ? 1 : Math.exp(-(t - 0.16) / 0.26);
@@ -747,16 +753,18 @@ function airBrake(rng) {
   });
   add(out, tilt, 0, 0.9);
   // upper "shimmer" layer that dies faster
-  add(out, noiseBurst(rng, 0.55, { hp: 4200, attack: 0.01, tau: 0.13, amp: 0.26 }), 0.005);
+  add(out, noiseBurst(rng, 0.55, { hp: 4200, attack: 0.01, tau: 0.1, amp: 0.16 }), 0.005);
   // low puff underneath for body
   const puff = noiseBurst(rng, 0.6, { lp: 700, attack: 0.03, tau: 0.12, amp: 0.2 });
   add(out, puff, 0.004);
   // valve body: mid band so it doesn't read as a thin hiss
-  const valve = noiseBurst(rng, 0.62, { bp: 1400, bpQ: 0.9, attack: 0.025, tau: 0.3, amp: 0.3 });
+  const valve = noiseBurst(rng, 0.64, { bp: 1500, bpQ: 0.65, attack: 0.025, tau: 0.28, amp: 0.5, peakNorm: 0.28 });
   add(out, valve, 0.008);
-  add(out, reverbSend(out, { wet: 0.2, size: 0.8, decay: 0.7, damp: 0.35 }), 0.01);
-  fitLength(out, 0.8);
-  return dcBlock(fadeEdges(out, 0.001, 0.08));
+  // tame the very top: a valve hiss, not a cymbal wash
+  const shaped = lowpass(out, 6800, 0.7);
+  add(shaped, reverbSend(shaped, { wet: 0.2, size: 0.8, decay: 0.7, damp: 0.35 }), 0.01);
+  fitLength(shaped, 0.8);
+  return dcBlock(fadeEdges(shaped, 0.001, 0.08));
 }
 
 /** Screeching steel brake: clustered high partials with drift + scrape. */
@@ -1212,9 +1220,9 @@ function renderAmbience() {
  * -3 dBFS: peaky material gets rounded with a gentle tanh instead of being
  * turned down (a quiet ambience must stay audible).
  */
-function matchLoudness(x, targetLufs) {
+function matchLoudness(x, targetLufs, sampleRate = SR) {
   for (let iter = 0; iter < 5; iter++) {
-    const lufs = integratedLoudness(x);
+    const lufs = integratedLoudness(x, sampleRate);
     if (!Number.isFinite(lufs)) break;
     const g = Math.pow(10, (targetLufs - lufs) / 20);
     for (let i = 0; i < x.length; i++) x[i] *= g;
@@ -1322,7 +1330,7 @@ async function main() {
       await writeFile(path.join(RAW_DIR, 'ambience.wav'), encodeWav(loop, RAW_SR));
     }
     // Circular resampling keeps the loop seam intact at the delivery rate.
-    const loopOut = matchLoudness(resample(loop, RAW_SR, SPRITE_SR, true), AMBIENCE_LUFS);
+    const loopOut = matchLoudness(resample(loop, RAW_SR, SPRITE_SR, true), AMBIENCE_LUFS, SPRITE_SR);
     await writeFile(path.join(OUT_DIR, 'ambience.wav'), encodeWav(loopOut, SPRITE_SR));
     console.log(
       `\nAmbience: ${(loop.length / SR).toFixed(1)} s loop, ${integratedLoudness(loop).toFixed(1)} LUFS, true peak ${db(truePeak(loop)).toFixed(1)} dBFS`
