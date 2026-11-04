@@ -93,3 +93,48 @@ paper_2/paper_3  -0.03    impact_1/impact_2    0.02
 | DC offset | 0.00000 |
 | Loop boundary step | 0.000244 (mean sample step 0.001076) |
 | Level match across the seam | 0.1 dB |
+
+## Runtime smoke test (`npm run audio:smoke`)
+
+No headless browser is installed in this environment (no Playwright, Chromium or
+Chrome), so instead of clicking the built game the real module
+`src/utils/audio.ts` is driven against a mocked Web Audio graph and the actual
+files in `public/audio/` (`scripts/smoke-audio.mjs`, run through `tsx`).
+
+```
+scenario: ok
+  ok   no AudioContext before the start gesture
+  ok   volume defaults to 0.7 and persists as tramvay_volume
+  ok   unlockAudio creates one AudioContext
+  ok   ambience bed starts as a loop
+  ok   press / switch / paper / hover resolve to sprite slices
+  ok   variant picking rotates — paper_1, paper_2, paper_3
+  ok   pulled decision: lever + bell + rumble + shrinking clacks
+  ok   straight decision: air brake + squeal + drone
+  ok   impact choreography — impact 0.08s · stamp 0.38s · sting 0.78s
+  ok   comic dilemma uses crash_comic
+  ok   mood selects the verdict sting
+  ok   summary reveal = stamp + relief; stopAllCues clears the field
+  ok   mute/volume drive the master gain; no key listener added
+  ok   no warnings, no unhandled rejections
+```
+
+Failure paths (the file really removed / served as `index.html` with HTTP 200):
+
+| Scenario | Result |
+| --- | --- |
+| `--scenario=missing-manifest` (sfx.json returns index.html, 200) | 1 warning, silent SFX, `playImpact` still returns 380 ms |
+| `--scenario=missing-sprite` (sfx.wav returns index.html, 200) | 1 warning, silent SFX, ambience still fades in |
+| `--scenario=absent` (`public/audio/sfx.json` deleted, fetch rejects) | 1 warning, silent SFX, no throw |
+
+Static serving check against `npm run dev`:
+
+| Request | Response |
+| --- | --- |
+| `/audio/sfx.json` | 200 `application/json` (1338 B) |
+| `/audio/sfx.wav` | 200 `audio/wav` (1 149 484 B) |
+| `/audio/ambience.wav` | 200 `audio/wav` (1 920 044 B) |
+| `/audio/does-not-exist.wav` | **200 `text/html`** (SPA fallback) |
+
+The last row is exactly why the engine checks `content-type` and catches
+`decodeAudioData` rejections instead of trusting the HTTP status.
