@@ -108,6 +108,8 @@ let ambSource: AudioBufferSourceNode | null = null;
 let manifestPromise: Promise<AudioManifest | null> | null = null;
 let bytesPromise: Promise<Record<string, ArrayBuffer | null>> | null = null;
 let readyPromise: Promise<void> | null = null;
+/** Set when the sprite could not be loaded/decoded — everything stays silent. */
+let sfxFailed = false;
 
 const activeVoices = new Set<ActiveVoice>();
 const pendingPlays: PendingPlay[] = [];
@@ -393,20 +395,27 @@ async function initAudio(): Promise<void> {
   try {
     const m = await loadManifest();
     const bytes = await ensureBytes();
-    if (!ctx || !m) return;
-    if (bytes.sfx) {
-      try {
-        // slice(0): decodeAudioData detaches the buffer; keep ours reusable.
-        spriteBuffer = await ctx.decodeAudioData(bytes.sfx.slice(0));
-      } catch (err) {
-        warnOnce('decode-sfx', `[audio] could not decode the SFX sprite (${errText(err)}) — SFX stay silent.`);
-        spriteBuffer = null;
-      }
+    if (!ctx || !m || !bytes.sfx) {
+      sfxFailed = true;
+      pendingPlays.length = 0;
+      if (m) void initAmbience(bytes.amb);
+      return;
     }
-    flushPending();
+    try {
+      // slice(0): decodeAudioData detaches the buffer; keep ours reusable.
+      spriteBuffer = await ctx.decodeAudioData(bytes.sfx.slice(0));
+    } catch (err) {
+      warnOnce('decode-sfx', `[audio] could not decode the SFX sprite (${errText(err)}) — SFX stay silent.`);
+      spriteBuffer = null;
+      sfxFailed = true;
+      pendingPlays.length = 0;
+    }
+    if (spriteBuffer) flushPending();
     void initAmbience(bytes.amb);
   } catch (err) {
     warnOnce('init', `[audio] init failed (${errText(err)}) — the game will run silently.`);
+    sfxFailed = true;
+    pendingPlays.length = 0;
   }
 }
 
@@ -509,7 +518,7 @@ function stopVoice(voice: ActiveVoice, t: number, fadeSec: number): void {
  */
 function playSlice(name: string, opts: PlayOptions = {}): void {
   try {
-    if (!soundEnabled) return;
+    if (!soundEnabled || sfxFailed) return;
     if (!ctx || !spriteBuffer || !manifest || !sfxBus) {
       // Queue only while an unlock is actually in flight.
       if (readyPromise && pendingPlays.length < 12) {
@@ -702,6 +711,9 @@ export function playHoverTick(): void {
 export function playDecision(pulled: boolean, approachSec: number): void {
   try {
     if (!ctx || !soundEnabled) return;
+    // Without a decoded sprite the whole cue (including the procedural
+    // rumble) stays silent — a half-working soundscape is worse than none.
+    if (!spriteBuffer) return;
     const t = ctx.currentTime;
     setDuck(DUCK_DECISION, 0.25);
     if (pulled) {
@@ -727,7 +739,7 @@ export function playDecision(pulled: boolean, approachSec: number): void {
 export function playImpact(options: { mood: Mood; comic?: boolean }): number {
   const msUntilStamp = Math.round((SILENCE_BEAT_SEC + STAMP_AFTER_IMPACT_SEC) * 1000);
   try {
-    if (!ctx || !soundEnabled) return msUntilStamp;
+    if (!ctx || !soundEnabled || !spriteBuffer) return msUntilStamp;
     const t = ctx.currentTime;
     stopRumble(0.05);
     const stingAt = SILENCE_BEAT_SEC + STAMP_AFTER_IMPACT_SEC + STING_AFTER_STAMP_SEC;
