@@ -10,8 +10,6 @@ interface TrolleyCanvasProps {
   dilemma: Dilemma;
   decision: Decision | null;
   isAnimating: boolean;
-  /** Called once per run, when the tram is 90 % of the way down the track. */
-  onApproachImpact?: () => void;
   onAnimationEnd: () => void;
   leverPulled: boolean;
   onLeverToggle: () => void;
@@ -110,7 +108,6 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   dilemma,
   decision,
   isAnimating,
-  onApproachImpact,
   onAnimationEnd,
   leverPulled,
   onLeverToggle,
@@ -121,8 +118,6 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   // StrictMode replays effects; these refs make the run fire its callbacks once.
   const impactFiredRef = useRef(false);
   const endedFiredRef = useRef(false);
-  const impactRef = useRef(onApproachImpact);
-  impactRef.current = onApproachImpact;
 
   useEffect(() => {
     if (isAnimating && decision) {
@@ -145,7 +140,6 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
         if (p >= 0.9 && !impactFiredRef.current) {
           impactFiredRef.current = true;
           setImpactHappened(true);
-          impactRef.current?.();
         }
 
         if (p < 1) {

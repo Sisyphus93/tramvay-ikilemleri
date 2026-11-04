@@ -46,6 +46,25 @@ export const TIMING = {
   /** rumble lowpass sweep */
   rumbleCutoffStart: 80,
   rumbleCutoffEnd: 380,
+  /** relative gains — tune the balance here */
+  gainPress: 0.7,
+  gainSwitch: 0.6,
+  gainPaper: 0.55,
+  gainHover: 0.18,
+  gainLeverClack: 0.9,
+  gainBell: 0.5,
+  gainAirBrake: 0.55,
+  gainSqueal: 0.32,
+  gainDrone: 0.22,
+  gainImpact: 1,
+  gainComicCrash: 0.85,
+  gainStamp: 0.95,
+  gainSting: 0.45,
+  /** ambience bus level (the buffer itself is mastered to -26 LUFS) */
+  ambienceLevel: 0.5,
+  /** ducked ambience levels */
+  duckDecision: 0.35,
+  duckSilence: 0.02,
 };
 
 /**
@@ -487,7 +506,7 @@ function startAmbience(): void {
     if (ambienceSource) {
       const now = ctx.currentTime;
       ambienceBus.gain.cancelScheduledValues(now);
-      ambienceBus.gain.setTargetAtTime(AMBIENCE_LEVEL, now, 0.4);
+      ambienceBus.gain.setTargetAtTime(TIMING.ambienceLevel, now, 0.4);
       return;
     }
     const src = ctx.createBufferSource();
@@ -499,13 +518,11 @@ function startAmbience(): void {
     const now = ctx.currentTime;
     ambienceBus.gain.cancelScheduledValues(now);
     ambienceBus.gain.setValueAtTime(0.0001, now);
-    ambienceBus.gain.linearRampToValueAtTime(AMBIENCE_LEVEL, now + TIMING.ambienceFadeIn);
+    ambienceBus.gain.linearRampToValueAtTime(TIMING.ambienceLevel, now + TIMING.ambienceFadeIn);
   } catch {
     warnOnce('ambience-start', 'Could not start the ambience loop.');
   }
 }
-
-const AMBIENCE_LEVEL = 0.5; // the buffer itself is mastered to -26 LUFS
 
 function duckAmbience(target: number, seconds: number): void {
   if (!engine) return;
@@ -744,22 +761,22 @@ function stopRumble(fade = 0.12): void {
  * ------------------------------------------------------------------ */
 
 export const playPress = (): void => {
-  playSprite('press', { gain: 0.7, rate: jitterRate() });
+  playSprite('press', { gain: TIMING.gainPress, rate: jitterRate() });
 };
 
 export const playSwitch = (): void => {
-  playSprite('switch', { gain: 0.6, rate: jitterRate() });
+  playSprite('switch', { gain: TIMING.gainSwitch, rate: jitterRate() });
 };
 
 export const playPaper = (): void => {
-  playSprite('paper', { gain: 0.55, rate: jitterRate() });
+  playSprite('paper', { gain: TIMING.gainPaper, rate: jitterRate() });
 };
 
 export const playHoverTick = (): void => {
   if (!isBrowser()) return;
   const fine = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
   if (!fine) return;
-  playSprite('hover', { gain: 0.18, rate: jitterRate() });
+  playSprite('hover', { gain: TIMING.gainHover, rate: jitterRate() });
 };
 
 /**
@@ -768,14 +785,14 @@ export const playHoverTick = (): void => {
  */
 export const playDecision = (pulled: boolean, approachSec: number): void => {
   const seconds = Math.max(0.4, approachSec);
-  duckAmbience(0.35, 0.4);
+  duckAmbience(TIMING.duckDecision, 0.4);
   if (pulled) {
-    playSprite('lever_clack', { gain: 0.9, rate: jitterRate() });
-    later(() => playSprite('bell', { gain: 0.5 }), TIMING.bellAfterLever * 1000);
+    playSprite('lever_clack', { gain: TIMING.gainLeverClack, rate: jitterRate() });
+    later(() => playSprite('bell', { gain: TIMING.gainBell }), TIMING.bellAfterLever * 1000);
   } else {
-    playSprite('air_brake', { gain: 0.55, rate: jitterRate() });
-    later(() => playSprite('brake_squeal', { gain: 0.32, rate: jitterRate() }), TIMING.squealAfterBrake * 1000);
-    later(() => playSprite('drone', { gain: 0.2 }), 120);
+    playSprite('air_brake', { gain: TIMING.gainAirBrake, rate: jitterRate() });
+    later(() => playSprite('brake_squeal', { gain: TIMING.gainSqueal, rate: jitterRate() }), TIMING.squealAfterBrake * 1000);
+    later(() => playSprite('drone', { gain: TIMING.gainDrone }), 120);
   }
   startRumble(seconds);
 };
@@ -794,7 +811,7 @@ export const playImpact = ({ mood = 'dread', comic = false }: ImpactOptions = {}
   stopRumble(0.06);
   clearTimers();
   // silence beat: duck almost to zero so the impact lands in a hole
-  duckAmbience(0.02, 0.15);
+  duckAmbience(TIMING.duckSilence, 0.15);
 
   const beatMs = Math.round(TIMING.silenceBeat * 1000);
   const stampMs = Math.round(TIMING.stampAfterImpact * 1000);
@@ -802,15 +819,15 @@ export const playImpact = ({ mood = 'dread', comic = false }: ImpactOptions = {}
 
   later(() => {
     if (comic) {
-      playSprite('crash_comic', { gain: 0.85, rate: jitterRate() });
+      playSprite('crash_comic', { gain: TIMING.gainComicCrash, rate: jitterRate() });
     } else {
-      playSprite('impact_muffled', { gain: 1, rate: jitterRate() });
+      playSprite('impact_muffled', { gain: TIMING.gainImpact, rate: jitterRate() });
     }
-    duckAmbience(0.3, 0.25);
+    duckAmbience(TIMING.duckDecision * 0.85, 0.25);
   }, beatMs);
-  later(() => playSprite('stamp', { gain: 0.95, rate: jitterRate() }), beatMs + stampMs);
+  later(() => playSprite('stamp', { gain: TIMING.gainStamp, rate: jitterRate() }), beatMs + stampMs);
   later(() => {
-    playSprite(`sting_${mood}`, { gain: 0.45 });
+    playSprite(`sting_${mood}`, { gain: TIMING.gainSting });
     restoreAmbience(2.5);
   }, beatMs + stingMs);
   // safety net: never leave the ambience ducked
