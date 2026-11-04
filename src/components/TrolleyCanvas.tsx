@@ -639,6 +639,12 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             onKeyDown={(e) => {
               if (!isAnimating && (e.key === 'Enter' || e.key === ' ')) {
                 e.preventDefault();
+                // Space is also a global shortcut: App's window keydown handler
+                // toggles the lever too. preventDefault does not stop that
+                // listener, so one keypress toggled twice and cancelled itself
+                // out — aria-pressed never changed and two clacks played.
+                // Scoped to this branch so `m` still reaches the global handler.
+                e.stopPropagation();
                 onLeverToggle();
               }
             }}
