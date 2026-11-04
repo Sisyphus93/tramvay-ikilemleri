@@ -8,7 +8,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { DILEMMAS } from './data/dilemmas.ts';
 import { Decision, PlayerHistoryEntry } from './types.ts';
 import { TrolleyHeader } from './components/TrolleyHeader.tsx';
-import { TrolleyCanvas } from './components/TrolleyCanvas.tsx';
+import { getTrolleyAnimationDurationSeconds, TrolleyCanvas } from './components/TrolleyCanvas.tsx';
 import { TrolleyControls } from './components/TrolleyControls.tsx';
 import { ResultOverlay } from './components/ResultOverlay.tsx';
 import { SummaryScreen } from './components/SummaryScreen.tsx';
@@ -16,14 +16,15 @@ import { TitleScreen } from './components/TitleScreen.tsx';
 import {
   getSoundEnabled,
   setSoundEnabled,
-  startMusicBed,
-  playSonicSignatureMotif,
-  playPremiumTransition,
-  playLeverSnap,
-  playDecisionWhoosh,
-  playRevealChime,
+  preloadAudio,
+  unlockAudio,
+  playPress,
+  playSwitch,
+  playPaper,
   playHoverTick,
-  playSoftTick,
+  playDecision,
+  playImpact,
+  stopAllCues,
 } from './utils/audio.ts';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
@@ -82,19 +83,19 @@ export default function App() {
   const [history, setHistory] = useState<PlayerHistoryEntry[]>([]);
   const [soundEnabled, setSoundState] = useState<boolean>(() => getSoundEnabled());
   const lastHoverRef = useRef(0);
+  const stampTimerRef = useRef<number | null>(null);
+  const resultTokenRef = useRef(0);
+  const animationEndHandledRef = useRef(false);
+  const recordedDilemmaIdsRef = useRef<Set<number>>(new Set());
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    const startOnFirstGesture = () => {
-      if (getSoundEnabled()) startMusicBed();
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
-    };
-    window.addEventListener('pointerdown', startOnFirstGesture);
-    window.addEventListener('keydown', startOnFirstGesture);
+    preloadAudio();
     return () => {
-      window.removeEventListener('pointerdown', startOnFirstGesture);
-      window.removeEventListener('keydown', startOnFirstGesture);
+      if (stampTimerRef.current !== null) window.clearTimeout(stampTimerRef.current);
+      stampTimerRef.current = null;
+      resultTokenRef.current++;
+      stopAllCues();
     };
   }, []);
 
@@ -115,39 +116,35 @@ export default function App() {
     const next = !soundEnabled;
     setSoundState(next);
     setSoundEnabled(next);
-    playSoftTick(next ? 1 : 0);
+    if (next) playSwitch();
   }, [soundEnabled]);
 
   const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
 
   const handleStart = useCallback(() => {
-    startMusicBed();
-    playSonicSignatureMotif();
-    playPremiumTransition();
+    void unlockAudio();
+    playPress();
     setGameState('PLAYING');
   }, []);
 
   const handleLeverToggle = useCallback(() => {
     if (isAnimating || showResult) return;
-    setLeverPulled((prev) => {
-      playLeverSnap();
-      return !prev;
-    });
+    playSwitch();
+    setLeverPulled((prev) => !prev);
   }, [isAnimating, showResult]);
 
   const handleMakeDecision = useCallback(
     (dec: Decision) => {
       if (isAnimating || showResult) return;
 
-      if (dec === 'diverted' && !leverPulled) {
-        setLeverPulled(true);
-        playLeverSnap();
-      } else if (dec === 'straight' && leverPulled) {
-        setLeverPulled(false);
-        playLeverSnap();
+      const pulled = dec === 'diverted';
+      if (pulled !== leverPulled) {
+        setLeverPulled(pulled);
+        playSwitch();
       }
 
-      playDecisionWhoosh();
+      animationEndHandledRef.current = false;
+      playDecision(pulled, getTrolleyAnimationDurationSeconds());
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
@@ -156,29 +153,41 @@ export default function App() {
   );
 
   const handleAnimationEnd = useCallback(() => {
-    setIsAnimating(false);
-    setShowResult(true);
-    playRevealChime();
+    if (animationEndHandledRef.current || decision === null) return;
+    animationEndHandledRef.current = true;
 
-    const chosenTrack =
-      decision === 'diverted'
-        ? currentDilemma.divertedTrack
-        : currentDilemma.straightTrack;
-
+    const chosenTrack = decision === 'diverted'
+      ? currentDilemma.divertedTrack
+      : currentDilemma.straightTrack;
+    const mood = currentDilemma.mood ?? (chosenTrack.isHuman ? 'dread' : 'absurd');
+    const delayMs = playImpact({ mood, comic: currentDilemma.comic });
     const entry: PlayerHistoryEntry = {
       dilemmaId: currentDilemma.id,
-      decision: decision || 'straight',
+      decision,
       leverPulled: decision === 'diverted',
       victimsLabel: chosenTrack.label,
       humanDeaths: chosenTrack.isHuman ? chosenTrack.count : 0,
       materialDamageTL: chosenTrack.monetaryValueTL || 0,
     };
 
-    setHistory((prev) => [...prev, entry]);
+    if (stampTimerRef.current !== null) window.clearTimeout(stampTimerRef.current);
+    const token = ++resultTokenRef.current;
+    stampTimerRef.current = window.setTimeout(() => {
+      if (token !== resultTokenRef.current) return;
+      stampTimerRef.current = null;
+      setIsAnimating(false);
+      setShowResult(true);
+      if (!recordedDilemmaIdsRef.current.has(entry.dilemmaId)) {
+        recordedDilemmaIdsRef.current.add(entry.dilemmaId);
+        setHistory((previous) => [...previous, entry]);
+      }
+    }, delayMs);
   }, [decision, currentDilemma]);
 
   const handleNextDilemma = useCallback(() => {
-    playPremiumTransition();
+    playPaper();
+    resultTokenRef.current++;
+    animationEndHandledRef.current = false;
     if (currentStep < DILEMMAS.length - 1) {
       setCurrentStep((prev) => prev + 1);
       setDecision(null);
@@ -193,7 +202,13 @@ export default function App() {
   }, [currentStep]);
 
   const handleRestart = useCallback(() => {
-    playPremiumTransition();
+    if (stampTimerRef.current !== null) window.clearTimeout(stampTimerRef.current);
+    stampTimerRef.current = null;
+    resultTokenRef.current++;
+    animationEndHandledRef.current = false;
+    recordedDilemmaIdsRef.current.clear();
+    stopAllCues();
+    playPaper();
     setCurrentStep(0);
     setDecision(null);
     setLeverPulled(false);
@@ -213,14 +228,14 @@ export default function App() {
       const next = route === 'diverted';
       if (next === leverPulled) return;
       setLeverPulled(next);
-      playLeverSnap();
+      playSwitch();
     },
     [isAnimating, showResult, leverPulled]
   );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'm' || e.key === 'M') {
+      if ((e.key === 'm' || e.key === 'M') && !e.repeat) {
         toggleSound();
       } else if (gameState === 'TITLE' && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();

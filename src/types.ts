@@ -63,6 +63,8 @@ export interface TrackTarget {
 export interface Dilemma {
   id: number;
   conceptualChoice?: boolean;
+  mood?: 'relief' | 'dread' | 'absurd';
+  comic?: boolean;
   title: string;
   question: string;
   straightTrack: TrackTarget;

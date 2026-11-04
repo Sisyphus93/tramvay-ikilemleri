@@ -5,7 +5,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Dilemma, Decision, TrackTarget, TrackEntityType } from '../types.ts';
-import { playRisingSweep, playLowThump } from '../utils/audio.ts';
 
 interface TrolleyCanvasProps {
   dilemma: Dilemma;
@@ -94,6 +93,11 @@ const TEAL = '#1f6b5c';
 const PAPER = '#ffffff';
 const CARD = '#f8f8f7';
 
+export const getTrolleyAnimationDurationSeconds = (): number => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 1.65;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.42 : 1.65;
+};
+
 export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   dilemma,
   decision,
@@ -110,27 +114,26 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
     if (isAnimating && decision) {
       setImpactHappened(false);
       setTramProgress(0);
-      playRisingSweep();
 
-      const prefersReducedMotion =
-        typeof window !== 'undefined' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const duration = prefersReducedMotion ? 420 : 1650;
+      const duration = getTrolleyAnimationDurationSeconds() * 1000;
       const startTime = performance.now();
+      let impactTriggered = false;
+      let animationEnded = false;
 
       const animate = (now: number) => {
         const elapsed = now - startTime;
         const p = Math.min(1, elapsed / duration);
         setTramProgress(easeInOutCubic(p));
 
-        if (p >= 0.9 && !impactHappened) {
+        if (p >= 0.9 && !impactTriggered) {
+          impactTriggered = true;
           setImpactHappened(true);
-          playLowThump();
         }
 
         if (p < 1) {
           animRef.current = requestAnimationFrame(animate);
-        } else {
+        } else if (!animationEnded) {
+          animationEnded = true;
           onAnimationEnd();
         }
       };
