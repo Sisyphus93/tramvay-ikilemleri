@@ -91,7 +91,6 @@ const PLATE_H = 72;
 const INK = '#171512';
 const RED = '#a82a22';
 const TEAL = '#1f6b5c';
-const NEUTRAL = '#4f4b45';
 const PAPER = '#ffffff';
 const CARD = '#f8f8f7';
 
@@ -167,6 +166,221 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   const straightActive = !leverPulled;
   const divertedActive = leverPulled;
 
+  const renderObjectGlyph = (target: TrackTarget, meta: EntityMeta) => {
+    switch (target.entityType) {
+      case 'pc':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Monitor */}
+            <rect x="-16" y="-12" width="21" height="15" rx="2" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <line x1="-12" y1="-6" x2="-2" y2="-6" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
+            <line x1="-12" y1="-2" x2="1" y2="-2" stroke={INK} strokeWidth="1.6" strokeLinecap="round" opacity="0.55" />
+            <line x1="-5.5" y1="3" x2="-5.5" y2="9" stroke={INK} strokeWidth="2.2" />
+            <line x1="-11" y1="9" x2="0" y2="9" stroke={INK} strokeWidth="2.2" strokeLinecap="round" />
+            {/* Tower / backbone node */}
+            <rect x="8" y="-12" width="8" height="21" rx="1.5" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <circle cx="12" cy="-7.5" r="1.5" fill={RED} />
+            <line x1="10.2" y1="-2" x2="13.8" y2="-2" stroke={INK} strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="10.2" y1="1.5" x2="13.8" y2="1.5" stroke={INK} strokeWidth="1.4" strokeLinecap="round" />
+          </g>
+        );
+
+      case 'steam':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Gamepad silhouette */}
+            <path
+              d="M -11 -8 H 11 C 15 -8 17 -4 17 1 L 15 9 C 14.2 12 11 12 9 9.5 L 6 6 H -6 L -9 9.5 C -11 12 -14.2 12 -15 9 L -17 1 C -17 -4 -15 -8 -11 -8 Z"
+              fill={PAPER}
+              stroke={INK}
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            {/* D-pad */}
+            <path d="M -9 -3.5 V 2.5 M -12 -0.5 H -6" stroke={INK} strokeWidth="2.1" strokeLinecap="round" />
+            {/* Action buttons */}
+            <circle cx="10.5" cy="-2" r="1.8" fill={RED} />
+            <circle cx="7" cy="1" r="1.8" fill={INK} />
+          </g>
+        );
+
+      case 'mysterybox':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Vault safe / crate */}
+            <rect x="-14" y="-13" width="28" height="26" rx="3" fill={PAPER} stroke={INK} strokeWidth="2.2" />
+            <rect x="-10" y="-9" width="20" height="18" rx="1.5" fill="none" stroke={INK} strokeWidth="1.3" opacity="0.55" />
+            <line x1="-15.5" y1="-6" x2="-13" y2="-6" stroke={INK} strokeWidth="2.6" strokeLinecap="round" />
+            <line x1="-15.5" y1="6" x2="-13" y2="6" stroke={INK} strokeWidth="2.6" strokeLinecap="round" />
+            <circle cx="1" cy="0" r="5.2" fill={RED} stroke={INK} strokeWidth="1.8" />
+            <circle cx="1" cy="0" r="1.6" fill={PAPER} />
+          </g>
+        );
+
+      case 'harddrive':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Master broadcast tape cassette */}
+            <rect x="-16" y="-11" width="32" height="22" rx="2.5" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <rect x="-13" y="-8" width="26" height="3.8" rx="1" fill={RED} />
+            <circle cx="-6.5" cy="2" r="4.3" fill="none" stroke={INK} strokeWidth="1.8" />
+            <circle cx="6.5" cy="2" r="4.3" fill="none" stroke={INK} strokeWidth="1.8" />
+            <circle cx="-6.5" cy="2" r="1.4" fill={INK} />
+            <circle cx="6.5" cy="2" r="1.4" fill={INK} />
+            <line x1="-6" y1="11" x2="6" y2="11" stroke={INK} strokeWidth="2.4" />
+          </g>
+        );
+
+      case 'taxi':
+        return (
+          <g transform="translate(-32, 1)">
+            {/* Roof TAXI lamp */}
+            <rect x="-5.5" y="-14" width="11" height="4.2" rx="1" fill={RED} stroke={INK} strokeWidth="1.6" />
+            {/* Cabin + body */}
+            <path
+              d="M -11 -9.5 H 9 L 13 -3 H 16.5 C 17.5 -3 18 -2 18 -1 V 5.5 H -17 V -1 C -17 -2 -16.2 -3 -15 -3 H -13 Z"
+              fill={PAPER}
+              stroke={INK}
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <line x1="-1" y1="-9" x2="-1" y2="-3" stroke={INK} strokeWidth="1.6" />
+            <line x1="-15" y1="1.2" x2="16" y2="1.2" stroke={RED} strokeWidth="2" strokeDasharray="3 2.5" />
+            <circle cx="-9.5" cy="6.5" r="3.6" fill={INK} />
+            <circle cx="9.5" cy="6.5" r="3.6" fill={INK} />
+            <circle cx="-9.5" cy="6.5" r="1.3" fill={PAPER} />
+            <circle cx="9.5" cy="6.5" r="1.3" fill={PAPER} />
+          </g>
+        );
+
+      case 'marti':
+        return (
+          <g transform="translate(-32, 1)">
+            {/* Scooter + rider silhouette */}
+            <line x1="-12" y1="7.5" x2="7.5" y2="7.5" stroke={INK} strokeWidth="3" strokeLinecap="round" />
+            <line x1="6.5" y1="7.5" x2="10.5" y2="-11" stroke={INK} strokeWidth="2.4" strokeLinecap="round" />
+            <line x1="6.5" y1="-11" x2="13.5" y2="-11" stroke={RED} strokeWidth="2.6" strokeLinecap="round" />
+            <circle cx="-11.5" cy="9" r="3.6" fill={INK} />
+            <circle cx="9" cy="9" r="3.6" fill={INK} />
+            {/* Passenger */}
+            <circle cx="-2.5" cy="-9.5" r="3" fill={RED} stroke={INK} strokeWidth="1.2" />
+            <path d="M -2.5 -6 L -2.5 5 M -2.5 -2.5 L 7.5 -6" fill="none" stroke={INK} strokeWidth="2" strokeLinecap="round" />
+          </g>
+        );
+
+      case 'robot':
+        return (
+          <g transform="translate(-32, 1)">
+            {/* Antenna + chassis head */}
+            <line x1="0" y1="-10" x2="0" y2="-15" stroke={INK} strokeWidth="2" strokeLinecap="round" />
+            <circle cx="0" cy="-16.5" r="2.3" fill={RED} stroke={INK} strokeWidth="1.3" />
+            <rect x="-13" y="-10" width="26" height="20" rx="4" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <rect x="-16" y="-3.5" width="3" height="7" rx="1" fill={INK} />
+            <rect x="13" y="-3.5" width="3" height="7" rx="1" fill={INK} />
+            <circle cx="-5" cy="-2" r="2.2" fill={RED} />
+            <circle cx="5" cy="-2" r="2.2" fill={RED} />
+            <line x1="-6" y1="5" x2="6" y2="5" stroke={INK} strokeWidth="2" strokeLinecap="round" />
+          </g>
+        );
+
+      case 'hype':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Megaphone / PR spotlight */}
+            <path
+              d="M -13 -3.5 L 5 -10.5 V 8.5 L -13 1.5 Z"
+              fill={PAPER}
+              stroke={INK}
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <path d="M -9 2.5 L -7 10.5 H -3.5 L -5 3.5" fill={RED} stroke={INK} strokeWidth="1.6" strokeLinejoin="round" />
+            <line x1="9.5" y1="-6" x2="14" y2="-8.5" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
+            <line x1="10" y1="-1" x2="15" y2="-1" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
+            <line x1="9.5" y1="4" x2="14" y2="6.5" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
+          </g>
+        );
+
+      case 'streamer':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* On-air broadcast screen */}
+            <rect x="-15" y="-10" width="30" height="20" rx="3" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <circle cx="-7" cy="0" r="3.2" fill={RED} />
+            <path d="M 0 -4 L 8 0 L 0 4 Z" fill={INK} />
+          </g>
+        );
+
+      case 'yourself':
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Mind / IQ gauge */}
+            <circle cx="0" cy="0" r="13" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <path d="M -7 4 A 8 8 0 0 1 7 4" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" />
+            <line x1="0" y1="3" x2="5" y2="-4" stroke={RED} strokeWidth="2.2" strokeLinecap="round" />
+            <circle cx="0" cy="3" r="2" fill={INK} />
+          </g>
+        );
+
+      case 'emptytrolley':
+        return (
+          <g transform="translate(-32, 0)">
+            <rect x="-15" y="-9" width="30" height="15" rx="3" fill={RED} stroke={INK} strokeWidth="2" />
+            <rect x="-11" y="-6" width="8" height="6" rx="1" fill={PAPER} stroke={INK} strokeWidth="1.4" />
+            <rect x="1" y="-6" width="10" height="6" rx="1" fill={PAPER} stroke={INK} strokeWidth="1.4" />
+            <circle cx="-8" cy="8" r="3.2" fill={INK} />
+            <circle cx="8" cy="8" r="3.2" fill={INK} />
+          </g>
+        );
+
+      case 'savings':
+        return (
+          <g transform="translate(-32, 0)">
+            <ellipse cx="0" cy="-7" rx="11" ry="4" fill={RED} stroke={INK} strokeWidth="1.8" />
+            <path d="M -11 -7 V 0 C -11 2.2 11 2.2 11 0 V -7" fill={PAPER} stroke={INK} strokeWidth="1.8" />
+            <path d="M -11 0 V 7 C -11 9.5 11 9.5 11 7 V 0" fill={PAPER} stroke={INK} strokeWidth="1.8" />
+          </g>
+        );
+
+      case 'painting':
+        return (
+          <g transform="translate(-32, 0)">
+            <rect x="-14" y="-11" width="28" height="22" rx="2" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <circle cx="-5" cy="-4" r="2.3" fill={RED} />
+            <path d="M -11 8 L -3 -1 L 3 5 L 7 1 L 11 8 Z" fill={INK} opacity="0.85" />
+          </g>
+        );
+
+      case 'glasses':
+        return (
+          <g transform="translate(-32, 0)">
+            <circle cx="-7.5" cy="1" r="6" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <circle cx="7.5" cy="1" r="6" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <path d="M -1.5 0.5 Q 0 -2 1.5 0.5" fill="none" stroke={RED} strokeWidth="2" />
+          </g>
+        );
+
+      default:
+        return (
+          <g transform="translate(-32, 0)">
+            {/* Blueprint stencil fallback using ENTITY_META 3-letter code */}
+            <rect x="-16" y="-11" width="32" height="22" rx="3" fill={PAPER} stroke={INK} strokeWidth="2" />
+            <line x1="-16" y1="-6" x2="16" y2="-6" stroke={RED} strokeWidth="2" />
+            <text
+              x="0"
+              y="3"
+              dominantBaseline="central"
+              textAnchor="middle"
+              fill={INK}
+              style={{ fontFamily: 'Archivo, sans-serif', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em' }}
+            >
+              {meta.code}
+            </text>
+          </g>
+        );
+    }
+  };
+
   const renderTarget = (target: TrackTarget, isDiverted: boolean) => {
     const isHit =
       impactHappened &&
@@ -174,6 +388,11 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
     const meta = ENTITY_META[target.entityType];
     const shownCount = Math.max(1, Math.min(target.count, 4));
     const y = isDiverted ? DIVERTED_Y : STRAIGHT_Y;
+    const renderAsHumanStick =
+      meta.kind === 'human' &&
+      target.entityType !== 'taxi' &&
+      target.entityType !== 'marti' &&
+      (target.isHuman || target.entityType === 'people');
 
     return (
       <g className={`blueprint-medallion ${isHit ? 'blueprint-medallion--hit' : ''}`} transform={`translate(${PLATE_X}, ${y})`}>
@@ -193,7 +412,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           {/* pictogram well */}
           <circle cx="-32" cy="0" r="23" fill="none" stroke={INK} strokeWidth="1.4" strokeDasharray="2 3.5" opacity="0.45" />
 
-          {meta.kind === 'human' && (
+          {renderAsHumanStick ? (
             <g>
               {Array.from({ length: shownCount }).map((_, i) => {
                 const step = shownCount > 2 ? 9 : 12;
@@ -213,38 +432,29 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
                 );
               })}
             </g>
-          )}
-
-          {meta.kind === 'object' && (
-            <g>
-              <rect x="-45" y="-13" width="26" height="26" rx="2" fill="rgba(23,21,18,.06)" stroke={INK} strokeWidth="1.8" />
-            </g>
-          )}
-
-          {meta.kind === 'cat' && (
+          ) : meta.kind === 'cat' ? (
             <g transform="translate(-32, 1)">
               <path
-                d="M -14 9 Q -14 -4 -8 -8 L -10 -16 L -2.5 -10.5 Q 0 -11 2.5 -10.5 L 10 -16 L 8 -8 Q 14 -4 14 9 Z"
-                fill="rgba(23,21,18,.08)"
-                stroke={NEUTRAL}
+                d="M -13 8 Q -13 -4 -7.5 -8 L -9.5 -15.5 L -2.5 -10 Q 0 -10.5 2.5 -10 L 9.5 -15.5 L 7.5 -8 Q 13 -4 13 8 Z"
+                fill={PAPER}
+                stroke={INK}
                 strokeWidth="2"
                 strokeLinejoin="round"
               />
-              <path d="M -14 9 Q 0 15 14 9" fill="none" stroke={NEUTRAL} strokeWidth="2" />
+              <circle cx="-4.5" cy="-2" r="1.6" fill={INK} />
+              <circle cx="4.5" cy="-2" r="1.6" fill={INK} />
+              <path d="M -2 2 L 2 2 L 0 4.2 Z" fill={RED} />
+              <path d="M -13 8 Q 0 13.5 13 8" fill="none" stroke={INK} strokeWidth="2" />
             </g>
+          ) : (
+            renderObjectGlyph(target, meta)
           )}
 
-          {meta.kind === 'abstract' && (
-            <g transform="translate(-32, 0)">
-              <circle cx="0" cy="0" r="13" fill="none" stroke={INK} strokeWidth="1.8" opacity="0.7" />
-              <path d="M 0 -17 L 6 -11 L 0 -5 L -6 -11 Z" fill="rgba(23,21,18,.08)" stroke={INK} strokeWidth="1.8" />
-            </g>
-          )}
-
-          {/* count */}
+          {/* count — vertically centered inside target plate */}
           <text
             x="34"
-            y="4"
+            y="0"
+            dominantBaseline="central"
             textAnchor="middle"
             fill={INK}
             style={{
