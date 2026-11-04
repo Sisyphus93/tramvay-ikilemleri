@@ -159,6 +159,39 @@ let unlockPromise: Promise<void> | null = null;
 let preloadPromise: Promise<SfxPayload | null> | null = null;
 let preloadStarted = false;
 
+/**
+ * Resume the context without ever throwing. `ctx.resume()` returns a promise
+ * that can reject (autoplay policy, iOS interruption); a bare `void ctx.resume()`
+ * turns that into an unhandled rejection, and no caller can do anything useful
+ * with the error anyway.
+ */
+function resumeContext(): void {
+  const ctx = engine?.ctx;
+  if (!ctx) return;
+  try {
+    if (ctx.state === 'running') return;
+    ctx.resume()?.catch?.(() => {
+      /* ignore */
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Counterpart of resumeContext; see the comment there. */
+function suspendContext(): void {
+  const ctx = engine?.ctx;
+  if (!ctx) return;
+  try {
+    if (ctx.state !== 'running') return;
+    ctx.suspend()?.catch?.(() => {
+      /* ignore */
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 interface SfxPayload {
   bytes: ArrayBuffer;
   sprite: SpriteMap | null;
@@ -297,6 +330,8 @@ export const setSoundEnabled = (enabled: boolean): void => {
   soundEnabled = enabled;
   writeItem(STORAGE_SOUND, enabled ? 'true' : 'false');
   if (!engine) return;
+  // unmuting must be audible even if the context was suspended while hidden
+  if (enabled) resumeContext();
   rampGain(engine.master.gain, enabled ? 1 : 0, 0.08);
   if (!enabled) {
     stopAllCues();
@@ -314,6 +349,7 @@ export const setAmbienceEnabled = (enabled: boolean): void => {
   ambienceEnabled = enabled;
   writeItem(STORAGE_AMBIENCE_ENABLED, enabled ? 'true' : 'false');
   if (!engine) return;
+  if (enabled) resumeContext();
   rampGain(engine.ambienceUserGain.gain, enabled ? ambienceVolume : 0, 0.15);
   if (enabled) startAmbience();
 };
@@ -335,6 +371,7 @@ export const setSfxEnabled = (enabled: boolean): void => {
   sfxEnabled = enabled;
   writeItem(STORAGE_SFX_ENABLED, enabled ? 'true' : 'false');
   if (!engine) return;
+  if (enabled) resumeContext();
   // unmuting is immediate so the confirmation tick is not swallowed by a ramp
   rampGain(engine.sfxUserGain.gain, enabled ? sfxVolume : 0, 0.06, enabled);
   if (!enabled) {
@@ -554,7 +591,13 @@ function buildGraph(ctx: Ctx): Engine {
  * keeps loading/starting in the background.
  */
 export const unlockAudio = (): Promise<void> => {
-  if (unlockPromise) return unlockPromise;
+  if (unlockPromise) {
+    // A later gesture is a fresh chance to resume. The context may have been
+    // suspended by a hidden tab while the player was muted, and returning the
+    // cached promise without touching the state left it suspended for good.
+    resumeContext();
+    return unlockPromise;
+  }
   unlockPromise = (async () => {
     if (!isBrowser()) return;
     const ctx = createContext();
@@ -1133,14 +1176,11 @@ function bindVisibility(): void {
   visibilityBound = true;
   document.addEventListener('visibilitychange', () => {
     if (!engine) return;
-    try {
-      if (document.hidden) {
-        void engine.ctx.suspend();
-      } else if (soundEnabled) {
-        void engine.ctx.resume();
-      }
-    } catch {
-      /* ignore */
-    }
+    // Resume regardless of mute state. Muting is already a master gain of 0, so
+    // resuming cannot make a muted player hear anything; but only resuming when
+    // soundEnabled meant a muted player who hid the tab got a context that was
+    // suspended and never resumed by anything.
+    if (document.hidden) suspendContext();
+    else resumeContext();
   });
 }
