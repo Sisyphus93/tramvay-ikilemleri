@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "audio:build": "node scripts/generate-audio.mjs && node scripts/package-audio.mjs",
+    "audio:verify": "node scripts/verify-audio.mjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
