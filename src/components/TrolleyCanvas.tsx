@@ -75,18 +75,18 @@ const ENTITY_META = {
 const easeInOutCubic = (p: number) =>
   p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 
-/* Scene geometry (viewBox 880 × 420) */
+/* Scene geometry (compact viewBox 880 × 248, zero vertical dead space) */
 const VIEW_W = 880;
-const VIEW_H = 340;
-const RAIL_Y = 215;
+const VIEW_H = 248;
+const RAIL_Y = 132;
 const JUNCTION_X = 310;
-const STRAIGHT_Y = 132;
-const DIVERTED_Y = 288;
+const STRAIGHT_Y = 72;
+const DIVERTED_Y = 192;
 const START_X = 78;
 const STOP_X = 622;
 const PLATE_X = 792;
 const PLATE_W = 136;
-const PLATE_H = 76;
+const PLATE_H = 72;
 
 const INK = '#171512';
 const RED = '#a82a22';
@@ -279,6 +279,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
     <div className="blueprint-canvas relative w-full select-none">
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        preserveAspectRatio="xMidYMid meet"
         className="blueprint-svg block"
         width="100%"
         style={{ height: 'auto', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
@@ -294,11 +295,9 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           </clipPath>
         </defs>
 
-        <rect width={VIEW_W} height={VIEW_H} fill={PAPER} />
-        <rect width={VIEW_W} height={VIEW_H} fill="url(#paperDots)" />
+        <rect width={VIEW_W} height={VIEW_H} fill={PAPER} opacity="0" />
 
         <g clipPath="url(#boardClip)">
-          <g transform="translate(0, -46)">
           {/* Approach */}
           <g>
             <line x1="18" y1={RAIL_Y - 12} x2={JUNCTION_X} y2={RAIL_Y - 12} stroke={INK} strokeWidth="5" strokeLinecap="round" />
@@ -307,9 +306,9 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
               <line
                 key={i}
                 x1={40 + i * 46}
-                y1={RAIL_Y - 19}
+                y1={RAIL_Y - 18}
                 x2={40 + i * 46}
-                y2={RAIL_Y + 19}
+                y2={RAIL_Y + 18}
                 stroke="#bdbcb7"
                 strokeWidth="2.4"
                 strokeLinecap="round"
@@ -320,20 +319,20 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           {/* Straight branch */}
           <g>
             <path
-              d={`M ${JUNCTION_X} ${RAIL_Y - 12} C 430 ${RAIL_Y - 12}, 520 ${STRAIGHT_Y - 40}, 760 ${STRAIGHT_Y - 12}`}
+              d={`M ${JUNCTION_X} ${RAIL_Y - 12} C 430 ${RAIL_Y - 12}, 520 ${STRAIGHT_Y - 26}, 760 ${STRAIGHT_Y - 12}`}
               fill="none"
               style={branchRail(straightActive)}
               strokeLinecap="round"
             />
             <path
-              d={`M ${JUNCTION_X} ${RAIL_Y + 12} C 430 ${RAIL_Y + 12}, 520 ${STRAIGHT_Y - 8}, 760 ${STRAIGHT_Y + 12}`}
+              d={`M ${JUNCTION_X} ${RAIL_Y + 12} C 430 ${RAIL_Y + 12}, 520 ${STRAIGHT_Y + 4}, 760 ${STRAIGHT_Y + 12}`}
               fill="none"
               style={branchRail(straightActive)}
               strokeLinecap="round"
             />
             {straightActive && (
               <path
-                d={`M ${JUNCTION_X} ${RAIL_Y} C 430 ${RAIL_Y}, 520 ${STRAIGHT_Y - 24}, 760 ${STRAIGHT_Y}`}
+                d={`M ${JUNCTION_X} ${RAIL_Y} C 430 ${RAIL_Y}, 520 ${STRAIGHT_Y - 11}, 760 ${STRAIGHT_Y}`}
                 fill="none"
                 stroke={TEAL}
                 strokeWidth="1.8"
@@ -347,20 +346,20 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           {/* Diverted branch */}
           <g>
             <path
-              d={`M ${JUNCTION_X} ${RAIL_Y - 12} C 430 ${RAIL_Y - 12}, 520 ${DIVERTED_Y + 8}, 760 ${DIVERTED_Y - 12}`}
+              d={`M ${JUNCTION_X} ${RAIL_Y - 12} C 430 ${RAIL_Y - 12}, 520 ${DIVERTED_Y - 4}, 760 ${DIVERTED_Y - 12}`}
               fill="none"
               style={branchRail(divertedActive)}
               strokeLinecap="round"
             />
             <path
-              d={`M ${JUNCTION_X} ${RAIL_Y + 12} C 430 ${RAIL_Y + 12}, 520 ${DIVERTED_Y + 40}, 760 ${DIVERTED_Y + 12}`}
+              d={`M ${JUNCTION_X} ${RAIL_Y + 12} C 430 ${RAIL_Y + 12}, 520 ${DIVERTED_Y + 26}, 760 ${DIVERTED_Y + 12}`}
               fill="none"
               style={branchRail(divertedActive)}
               strokeLinecap="round"
             />
             {divertedActive && (
               <path
-                d={`M ${JUNCTION_X} ${RAIL_Y} C 430 ${RAIL_Y}, 520 ${DIVERTED_Y + 24}, 760 ${DIVERTED_Y}`}
+                d={`M ${JUNCTION_X} ${RAIL_Y} C 430 ${RAIL_Y}, 520 ${DIVERTED_Y + 11}, 760 ${DIVERTED_Y}`}
                 fill="none"
                 stroke={RED}
                 strokeWidth="1.8"
@@ -386,7 +385,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 
           {/* Mechanical lever */}
           <g
-            transform="translate(112, 342)"
+            transform="translate(196, 224)"
             className="blueprint-lever"
             onClick={!isAnimating ? onLeverToggle : undefined}
             onKeyDown={(e) => {
@@ -401,15 +400,15 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             aria-label={leverPulled ? 'Makas kolunu düz hatta al' : 'Makas kolunu çevir'}
             aria-pressed={leverPulled}
           >
-            <rect x="-42" y="2" width="84" height="34" rx="5" className="blueprint-lever__plate" />
-            <rect x="-32" y="-4" width="64" height="20" rx="4" fill={INK} />
-            <rect x="-25" y="0.5" width="50" height="3.5" rx="1.75" fill="rgba(242,233,216,.45)" />
+            <rect x="-38" y="0" width="76" height="22" rx="4" className="blueprint-lever__plate" />
+            <rect x="-28" y="-4" width="56" height="16" rx="3.5" fill={INK} />
+            <rect x="-21" y="0" width="42" height="3" rx="1.5" fill="rgba(242,233,216,.45)" />
             <g className="blueprint-lever__handle" style={{ transform: `rotate(${leverPulled ? 26 : -26}deg)` }}>
-              <line x1="0" y1="6" x2="0" y2="-52" stroke={INK} strokeWidth="6" strokeLinecap="round" />
-              <circle cx="0" cy="-59" r="14" fill={RED} stroke={INK} strokeWidth="3.5" />
-              <circle cx="-4" cy="-63" r="3.5" fill={PAPER} opacity="0.7" />
+              <line x1="0" y1="4" x2="0" y2="-34" stroke={INK} strokeWidth="5.5" strokeLinecap="round" />
+              <circle cx="0" cy="-40" r="11" fill={RED} stroke={INK} strokeWidth="3" />
+              <circle cx="-3.2" cy="-43.2" r="2.8" fill={PAPER} opacity="0.7" />
             </g>
-            <circle cx="0" cy="6" r="7" fill={PAPER} stroke={INK} strokeWidth="3" />
+            <circle cx="0" cy="4" r="6" fill={PAPER} stroke={INK} strokeWidth="2.8" />
           </g>
 
           {/* Tram */}
@@ -424,14 +423,14 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 
             {/* Pantograph */}
             <path
-              d="M -24 -30 L -44 -62 L 14 -62"
+              d="M -24 -30 L -42 -50 L 14 -50"
               fill="none"
               stroke={INK}
               strokeWidth="3"
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            <line x1="-44" y1="-62" x2="30" y2="-62" stroke={INK} strokeWidth="3" strokeLinecap="round" />
+            <line x1="-42" y1="-50" x2="30" y2="-50" stroke={INK} strokeWidth="3" strokeLinecap="round" />
 
             {/* Roof */}
             <rect x="-62" y="-37" width="124" height="11" rx="4" fill={INK} />
@@ -469,7 +468,6 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             <circle cx="38" cy="33" r="9" fill={INK} />
             <circle cx="-38" cy="33" r="3.4" fill={PAPER} />
             <circle cx="38" cy="33" r="3.4" fill={PAPER} />
-          </g>
           </g>
         </g>
       </svg>

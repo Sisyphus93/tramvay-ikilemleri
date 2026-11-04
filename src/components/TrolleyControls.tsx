@@ -52,8 +52,15 @@ export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
           1
         </span>
         <span className="choice__body">
-          <span className="choice__route">
-            {dilemma.conceptualChoice ? 'Birinci seçenek' : 'Düz hat · müdahale yok'}
+          <span className="choice__meta">
+            <span className="choice__route">
+              <span className="choice__dot" aria-hidden="true" />
+              {dilemma.conceptualChoice ? 'Birinci seçenek' : 'Düz hat · müdahale yok'}
+            </span>
+            <span className="choice__count numeral">
+              ×{dilemma.straightTrack.count}
+              <span>{dilemma.straightTrack.isHuman ? 'canlı' : 'hedef'}</span>
+            </span>
           </span>
           <span className="choice__title">{dilemma.straightActionLabel}</span>
           <span className="choice__desc">{straightDesc}</span>
@@ -76,8 +83,15 @@ export const TrolleyControls: React.FC<TrolleyControlsProps> = ({
           2
         </span>
         <span className="choice__body">
-          <span className="choice__route">
-            {dilemma.conceptualChoice ? 'İkinci seçenek' : 'Makas hattı · kolu çek'}
+          <span className="choice__meta">
+            <span className="choice__route">
+              <span className="choice__dot choice__dot--alt" aria-hidden="true" />
+              {dilemma.conceptualChoice ? 'İkinci seçenek' : 'Makas hattı · kolu çek'}
+            </span>
+            <span className="choice__count numeral">
+              ×{dilemma.divertedTrack.count}
+              <span>{dilemma.divertedTrack.isHuman ? 'canlı' : 'hedef'}</span>
+            </span>
           </span>
           <span className="choice__title">{dilemma.divertedActionLabel}</span>
           <span className="choice__desc">{divertedDesc}</span>

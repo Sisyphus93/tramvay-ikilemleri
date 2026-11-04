@@ -44,17 +44,17 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
         </div>
 
         {isPlaying && (
-          <div className="header-meters">
+          <div className="header-meters" aria-label="Oyun durumu">
             <span className="meter">
-              İkilem
+              <span className="meter__label">İkilem</span>
               <span className="meter__value numeral">
                 {currentStep + 1}
-                <span style={{ color: 'var(--muted)', fontWeight: 400 }}> / {totalSteps}</span>
+                <span className="meter__total"> / {totalSteps}</span>
               </span>
             </span>
             <span className="meter__divider" />
             <span className="meter">
-              Zayiat
+              <span className="meter__label">Zayiat</span>
               <span className="meter__value numeral meter__value--bad">{totalDeaths}</span>
             </span>
           </div>
