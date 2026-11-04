@@ -99,6 +99,13 @@ export default function App() {
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** guards against a second onAnimationEnd (and duplicate history rows) */
   const verdictGuardRef = useRef(false);
+  /**
+   * One advance per verdict. The verdict card stays mounted — and its button
+   * stays clickable — for the whole CONTROL_SWAP_MS exit, so a second click
+   * (or a click plus an Enter keypress) used to run handleNextDilemma twice
+   * and skip a dilemma.
+   */
+  const advancingRef = useRef(false);
 
   const clearRevealTimer = useCallback(() => {
     if (revealTimerRef.current !== null) {
@@ -134,7 +141,15 @@ export default function App() {
     if (next) playSwitch();
   }, [soundEnabled]);
 
-  const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
+  const currentDilemma = DILEMMAS[currentStep];
+  if (!currentDilemma) {
+    // Unreachable: currentStep is clamped at every write site. The previous
+    // `|| DILEMMAS[0]` fallback failed silently — it rendered a replayed
+    // dilemma 1 under a "28 / 27" header and made the Summary unreachable.
+    throw new Error(
+      `[App] currentStep ${currentStep} is out of range (0..${DILEMMAS.length - 1})`
+    );
+  }
 
   const handleStart = useCallback(() => {
     // Synchronous inside the gesture: this is the only place an AudioContext is born.
@@ -164,6 +179,8 @@ export default function App() {
 
       clearRevealTimer();
       verdictGuardRef.current = false;
+      // a new round starts: the next verdict may be advanced again
+      advancingRef.current = false;
       // a still-ringing impact or stamp from the previous round dies here
       fadeOutOutcome();
       setDecision(dec);
@@ -217,12 +234,16 @@ export default function App() {
   useEffect(() => () => clearRevealTimer(), [clearRevealTimer]);
 
   const handleNextDilemma = useCallback(() => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+
     clearRevealTimer();
     verdictGuardRef.current = false;
     // never let a long comic crash (1.2 s) bleed into the next dilemma
     fadeOutOutcome();
     if (currentStep < DILEMMAS.length - 1) {
-      setCurrentStep((prev) => prev + 1);
+      // clamped, so currentStep can never leave 0..DILEMMAS.length - 1
+      setCurrentStep((prev) => Math.min(prev + 1, DILEMMAS.length - 1));
       setDecision(null);
       setLeverPulled(false);
       setShowResult(false);
@@ -237,6 +258,7 @@ export default function App() {
   const handleRestart = useCallback(() => {
     clearRevealTimer();
     verdictGuardRef.current = false;
+    advancingRef.current = false;
     // sweep first, then play the page-turn: it used to be stopped an instant
     // after it started, so restart was silent
     fadeOutOutcome();
