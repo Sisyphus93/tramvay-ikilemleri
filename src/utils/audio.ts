@@ -77,12 +77,34 @@ const IMPACT_TO_STAMP_MS = Math.round((TIMING.silenceBeat + TIMING.stampAfterImp
  * ------------------------------------------------------------------ */
 
 const SFX_MAP_URL = '/audio/sfx.json';
-const AMBIENCE_URLS = ['/audio/ambience.ogg', '/audio/ambience.m4a', '/audio/ambience.wav'];
 
-const SFX_FORMATS = [
+interface AudioFormat {
+  url: string;
+  type: string;
+}
+
+/**
+ * Candidate order is only a starting preference — `orderFormats` re-ranks it by
+ * `canPlayType` and every candidate is tried through fetch *and* decode, so a
+ * format that is claimed but undecodable still falls through to the next.
+ *
+ * The WAV entries are a genuine last resort for a local `npm run audio:build`
+ * without ffmpeg, which writes only `sfx.wav` + `ambience.wav`. They are NOT
+ * committed, so a deploy never has them: Render's SPA catch-all answers the
+ * missing path with index.html and a 200, which `fetchFirstFormat` rejects on
+ * the content-type and moves past. Ogg or AAC always wins first in production,
+ * so the WAV is never even requested there.
+ */
+const SFX_FORMATS: readonly AudioFormat[] = [
   { url: '/audio/sfx.ogg', type: 'audio/ogg; codecs=vorbis' },
   { url: '/audio/sfx.m4a', type: 'audio/mp4; codecs=mp4a.40.2' },
   { url: '/audio/sfx.wav', type: 'audio/wav' },
+];
+
+const AMBIENCE_FORMATS: readonly AudioFormat[] = [
+  { url: '/audio/ambience.ogg', type: 'audio/ogg; codecs=vorbis' },
+  { url: '/audio/ambience.m4a', type: 'audio/mp4; codecs=mp4a.40.2' },
+  { url: '/audio/ambience.wav', type: 'audio/wav' },
 ];
 
 type SpriteMap = Record<string, [number, number]>;
@@ -194,6 +216,8 @@ function suspendContext(): void {
 
 interface SfxPayload {
   bytes: ArrayBuffer;
+  /** which candidate these bytes came from, so the decode fallback can skip it */
+  format: AudioFormat;
   sprite: SpriteMap | null;
 }
 
@@ -427,6 +451,10 @@ function createContext(): Ctx | null {
 export const preloadAudio = (): void => {
   if (!isBrowser()) return;
   if (!preloadPromise) preloadPromise = fetchSfx();
+  // Deliberately not chained to the SFX result. This call used to sit inside
+  // fetchSfx after its early returns, so a sprite that failed to load also
+  // stopped the ambience bed from ever being fetched.
+  void prefetchAmbience();
 };
 
 function fetchSfx(): Promise<SfxPayload | null> {
@@ -454,68 +482,107 @@ function fetchSfx(): Promise<SfxPayload | null> {
       warnOnce('sfx-json', `Could not load ${SFX_MAP_URL}; using built-in slice map.`);
     }
 
-    const url = pickSfxUrl();
-    if (!url) {
-      warnOnce('sfx-format', 'No supported audio format for the SFX sprite; running silently.');
+    const fetched = await fetchFirstFormat(SFX_FORMATS);
+    if (!fetched) {
+      warnOnce('sfx-fetch', 'Could not load the SFX sprite; effects will be silent.');
       return null;
     }
-    try {
-      const res = await fetch(url, { cache: 'force-cache' });
-      if (!res.ok) {
-        warnOnce('sfx-fetch', `Could not load ${url}; effects will be silent.`);
-        return null;
-      }
-      const type = res.headers.get('content-type') ?? '';
-      if (type.includes('text/html')) {
-        // SPA fallback served index.html with 200
-        warnOnce('sfx-fetch', `Could not load ${url}; effects will be silent.`);
-        return null;
-      }
-      const bytes = await res.arrayBuffer();
-      // ambience in the background; it is only needed once playback starts
-      void prefetchAmbience();
-      return { bytes, sprite };
-    } catch {
-      warnOnce('sfx-fetch', `Could not load ${url}; effects will be silent.`);
-      return null;
-    }
+    return { bytes: fetched.bytes, format: fetched.format, sprite };
   })();
 }
 
 let pendingSprite: SpriteMap | null = null;
-let pendingAmbience: Promise<ArrayBuffer | null> | null = null;
 
-function pickSfxUrl(): string | null {
-  if (!isBrowser()) return null;
-  const probe =
-    typeof document !== 'undefined'
-      ? document.createElement('audio')
-      : (null as unknown as HTMLAudioElement);
-  for (const format of SFX_FORMATS) {
-    if (format.type === 'audio/wav') return format.url; // last resort
-    if (!probe) continue;
-    const can = probe.canPlayType(format.type);
-    if (can === 'probably' || can === 'maybe') return format.url;
-  }
-  return SFX_FORMATS[SFX_FORMATS.length - 1].url;
+interface FetchedAudio {
+  format: AudioFormat;
+  bytes: ArrayBuffer;
 }
 
-function prefetchAmbience(): Promise<ArrayBuffer | null> {
+let pendingAmbience: Promise<FetchedAudio | null> | null = null;
+
+/**
+ * Candidates in the order this browser should try them: whatever `canPlayType`
+ * claims first, everything else after. Nothing is dropped — canPlayType is
+ * conservative, and one extra fetch is cheaper than running silently.
+ */
+function orderFormats(formats: readonly AudioFormat[]): AudioFormat[] {
+  if (!isBrowser() || typeof document === 'undefined') return [...formats];
+  const probe = document.createElement('audio');
+  const supported: AudioFormat[] = [];
+  const rest: AudioFormat[] = [];
+  for (const format of formats) {
+    let can = '';
+    try {
+      can = probe.canPlayType(format.type);
+    } catch {
+      can = '';
+    }
+    if (can === 'probably' || can === 'maybe') supported.push(format);
+    else rest.push(format);
+  }
+  return [...supported, ...rest];
+}
+
+/**
+ * Fetch the first candidate that answers with real audio bytes. A 200 whose
+ * content-type is text/html is the SPA catch-all serving index.html for a path
+ * that does not exist, so it counts as a miss and we move on to the next format.
+ */
+async function fetchFirstFormat(formats: readonly AudioFormat[]): Promise<FetchedAudio | null> {
+  for (const format of orderFormats(formats)) {
+    try {
+      const res = await fetch(format.url, { cache: 'force-cache' });
+      if (!res.ok) continue;
+      const type = res.headers.get('content-type') ?? '';
+      if (type.includes('text/html')) continue;
+      return { format, bytes: await res.arrayBuffer() };
+    } catch {
+      /* try the next format */
+    }
+  }
+  return null;
+}
+
+/**
+ * Decode `first`, and if the decoder refuses it, fetch and decode the remaining
+ * candidates in turn. Choosing a URL with canPlayType is not enough on its own:
+ * a browser can claim a format and then fail to decode the actual file, and the
+ * old code gave up there instead of trying the other format it also ships.
+ *
+ * Only callable once a context exists, i.e. from inside unlockAudio.
+ */
+async function decodeWithFallback(
+  ctx: Ctx,
+  formats: readonly AudioFormat[],
+  first: FetchedAudio,
+  key: string
+): Promise<AudioBuffer | null> {
+  const decoded = await decode(ctx, first.bytes, key);
+  if (decoded) return decoded;
+  for (const format of orderFormats(formats)) {
+    if (format.url === first.format.url) continue;
+    try {
+      const res = await fetch(format.url, { cache: 'force-cache' });
+      if (!res.ok) continue;
+      const type = res.headers.get('content-type') ?? '';
+      if (type.includes('text/html')) continue;
+      const buffer = await decode(ctx, await res.arrayBuffer(), key);
+      if (buffer) return buffer;
+    } catch {
+      /* try the next format */
+    }
+  }
+  return null;
+}
+
+function prefetchAmbience(): Promise<FetchedAudio | null> {
   if (pendingAmbience) return pendingAmbience;
   pendingAmbience = (async () => {
-    for (const candidate of AMBIENCE_URLS) {
-      try {
-        const res = await fetch(candidate, { cache: 'force-cache' });
-        if (!res.ok) continue;
-        const type = res.headers.get('content-type') ?? '';
-        if (type.includes('text/html')) continue;
-        return await res.arrayBuffer();
-      } catch {
-        continue;
-      }
+    const fetched = await fetchFirstFormat(AMBIENCE_FORMATS);
+    if (!fetched) {
+      warnOnce('ambience-fetch', 'Could not load the ambience loop; continuing without it.');
     }
-    warnOnce('ambience-fetch', 'Could not load the ambience loop; continuing without it.');
-    return null;
+    return fetched;
   })();
   return pendingAmbience;
 }
@@ -626,7 +693,12 @@ export const unlockAudio = (): Promise<void> => {
     }
 
     if (payload?.bytes) {
-      const decoded = await decode(ctx, payload.bytes, 'sfx-decode');
+      const decoded = await decodeWithFallback(
+        ctx,
+        SFX_FORMATS,
+        { format: payload.format, bytes: payload.bytes },
+        'sfx-decode'
+      );
       if (decoded) created.sfxBuffer = decoded;
     }
     const sprite = payload?.sprite ?? pendingSprite;
@@ -646,14 +718,21 @@ export const unlockAudio = (): Promise<void> => {
     if (created.sfxBuffer) flushQueuedPress();
 
     startAmbience();
-    void pendingAmbience?.then(async (ambBytes) => {
-      if (!ambBytes || !engine || engine !== created) return;
-      const amb = await decode(created.ctx, ambBytes, 'ambience-decode');
-      if (amb) {
-        created.ambienceBuffer = amb;
-        startAmbience();
-      }
-    });
+    // prefetchAmbience() rather than the pendingAmbience variable: if the
+    // preload never ran, the bed used to have nothing to wait for and so never
+    // loaded at all.
+    void prefetchAmbience()
+      .then(async (fetched) => {
+        if (!fetched || !engine || engine !== created) return;
+        const amb = await decodeWithFallback(created.ctx, AMBIENCE_FORMATS, fetched, 'ambience-decode');
+        if (amb) {
+          created.ambienceBuffer = amb;
+          startAmbience();
+        }
+      })
+      .catch(() => {
+        /* never throw at the game */
+      });
   })().catch(() => {
     /* never throw at the game */
   });

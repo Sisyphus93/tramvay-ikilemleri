@@ -17,8 +17,11 @@ It never uses oscillators or synth beeps.
 | `ambience.ogg` / `ambience.m4a` | 30 s seamless loop: brown-noise hum, faint 50 Hz mains tone, vinyl crackle, distant rail clatter |
 
 Format choice at runtime: `audio/ogg; codecs=vorbis` → `audio/mp4; codecs=mp4a.40.2`
-→ `audio/wav` (last resort). The engine slices `sfx.*` with the millisecond
-offsets in `sfx.json` and applies a few-ms fade at each slice end.
+→ `audio/wav`. That order is only a starting preference: the engine re-ranks the
+candidates with `canPlayType` and then tries each one through fetch *and* decode,
+so a format the browser claims but cannot actually decode still falls through to
+the next one. The engine slices `sfx.*` with the millisecond offsets in
+`sfx.json` and applies a few-ms fade at each slice end.
 
 The encoders' priming delay was measured by decoding each file back and
 cross-correlating it against the raw render; every shipped file has a lag of
@@ -88,10 +91,14 @@ npm run audio:verify    # numeric QA: peaks, DC, centroids, partials, loop seam
 ```
 
 `audio:build` only needs Node. Encoding Ogg/AAC additionally needs `ffmpeg` on
-`PATH` (or `FFMPEG=/path/to/ffmpeg`). Without it, the build ships
-`public/audio/sfx.wav` + `ambience.wav` and the engine falls back to WAV.
+`PATH` (or `FFMPEG=/path/to/ffmpeg`). Without it, the build writes
+`public/audio/sfx.wav` + `ambience.wav` instead and the engine falls back to WAV.
 
-The generated files **are committed**, so deploying never needs `ffmpeg`.
+The Ogg/AAC files **are committed**, so deploying never needs `ffmpeg`. The WAV
+files are **not** committed — they exist only in a local no-ffmpeg working copy,
+and a deploy always serves Ogg or AAC. Asking a deploy for a WAV path returns
+`index.html` with a 200 through the SPA catch-all; the engine rejects that on the
+content-type and moves on to the next candidate.
 
 ## Replacing a single sound with a real recording
 
