@@ -7,6 +7,7 @@ import React from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Dilemma, Decision } from '../types.ts';
 import { ArrowRight, MessageSquare, ShieldCheck } from 'lucide-react';
+import { playPaper } from '../utils/audio.ts';
 
 interface ResultOverlayProps {
   dilemma: Dilemma;
@@ -113,7 +114,14 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
           <span className="verdict__next-hint">
             Enter ile ilerle
           </span>
-          <button onClick={onNext} className="btn btn--lg">
+          <button
+            onClick={() => {
+              playPaper();
+              onNext();
+            }}
+            data-hover-sound
+            className="btn btn--lg"
+          >
             <span>{isLast ? 'Ahlaki sicil karnesi' : 'Sonraki ikilem'}</span>
             <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
           </button>

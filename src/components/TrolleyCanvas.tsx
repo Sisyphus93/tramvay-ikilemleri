@@ -5,7 +5,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Dilemma, Decision, TrackTarget, TrackEntityType } from '../types.ts';
-import { playRisingSweep, playLowThump } from '../utils/audio.ts';
 
 interface TrolleyCanvasProps {
   dilemma: Dilemma;
@@ -15,6 +14,17 @@ interface TrolleyCanvasProps {
   leverPulled: boolean;
   onLeverToggle: () => void;
 }
+
+/** Tram animation length, in ms. Exported so the audio can be synced to it. */
+export const TRAM_ANIMATION_MS = 1650;
+export const TRAM_ANIMATION_REDUCED_MS = 420;
+
+/** The tram animation duration for the current user preference. */
+export const getTramAnimationSeconds = (): number => {
+  if (typeof window === 'undefined') return TRAM_ANIMATION_MS / 1000;
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return (prefersReducedMotion ? TRAM_ANIMATION_REDUCED_MS : TRAM_ANIMATION_MS) / 1000;
+};
 
 type EntityKind = 'human' | 'object' | 'cat' | 'abstract';
 
@@ -105,17 +115,21 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   const [tramProgress, setTramProgress] = useState<number>(0);
   const [impactHappened, setImpactHappened] = useState(false);
   const animRef = useRef<number | null>(null);
+  // StrictMode replays effects; these refs make the run fire its callbacks once.
+  const impactFiredRef = useRef(false);
+  const endedFiredRef = useRef(false);
 
   useEffect(() => {
     if (isAnimating && decision) {
       setImpactHappened(false);
       setTramProgress(0);
-      playRisingSweep();
+      impactFiredRef.current = false;
+      endedFiredRef.current = false;
 
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const duration = prefersReducedMotion ? 420 : 1650;
+      const duration = prefersReducedMotion ? TRAM_ANIMATION_REDUCED_MS : TRAM_ANIMATION_MS;
       const startTime = performance.now();
 
       const animate = (now: number) => {
@@ -123,14 +137,15 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
         const p = Math.min(1, elapsed / duration);
         setTramProgress(easeInOutCubic(p));
 
-        if (p >= 0.9 && !impactHappened) {
+        if (p >= 0.9 && !impactFiredRef.current) {
+          impactFiredRef.current = true;
           setImpactHappened(true);
-          playLowThump();
         }
 
         if (p < 1) {
           animRef.current = requestAnimationFrame(animate);
-        } else {
+        } else if (!endedFiredRef.current) {
+          endedFiredRef.current = true;
           onAnimationEnd();
         }
       };

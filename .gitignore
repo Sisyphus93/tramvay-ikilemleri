@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# throwaway e2e bundle
+arena-verify/.bundle.mjs
