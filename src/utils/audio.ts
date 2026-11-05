@@ -434,16 +434,22 @@ function createContext(): Ctx | null {
 }
 
 /**
- * Prefetch the sprite and ambience bytes on page load. No AudioContext is
- * created here — that only happens inside a user gesture (`unlockAudio`).
+ * Prefetch the SFX sprite bytes on page load. No AudioContext is created here —
+ * that only happens inside a user gesture (`unlockAudio`).
+ *
+ * The ambience bed is deliberately NOT fetched here any more. It is ~193 kB that
+ * the title screen can never play: `startAmbience` refuses to run until
+ * `ambienceArmed` is set, and that only happens inside the Start gesture. So it
+ * was being downloaded on every landing for nothing. `armAmbience` kicks the
+ * fetch off instead, synchronously inside that gesture, and `prefetchAmbience`
+ * memoises on `pendingAmbience` so the extra call site still issues exactly one
+ * request. The sprite stays eager — `playSprite` silently drops a cue whose
+ * buffer is not decoded yet, and only `playPress` has a retry queue, so deferring
+ * the sprite could cost the first lever sound rather than merely delay it.
  */
 export const preloadAudio = (): void => {
   if (!isBrowser()) return;
   if (!preloadPromise) preloadPromise = fetchSfx();
-  // Deliberately not chained to the SFX result. This call used to sit inside
-  // fetchSfx after its early returns, so a sprite that failed to load also
-  // stopped the ambience bed from ever being fetched.
-  void prefetchAmbience();
 };
 
 function fetchSfx(): Promise<SfxPayload | null> {
@@ -779,9 +785,24 @@ function restoreAmbience(seconds = 2): void {
   duckAmbience(1, seconds);
 }
 
-/** Arm the ambience bed. Called inside the Start gesture. */
+/**
+ * Arm the ambience bed. Called inside the Start gesture.
+ *
+ * Also kicks off the bed's fetch, which `preloadAudio` no longer does. Starting
+ * it here rather than leaving it to `unlockAudio` matters for timing: `unlockAudio`
+ * only reaches its own `prefetchAmbience` after the context is built and resumed,
+ * i.e. several awaits into the gesture, whereas this runs synchronously inside it
+ * — so the bed starts downloading no later than it used to.
+ *
+ * Deliberately not chained to the SFX result. This call used to sit inside
+ * `fetchSfx` after its early returns, so a sprite that failed to load also
+ * stopped the ambience bed from ever being fetched. `prefetchAmbience` memoises
+ * on `pendingAmbience` and its fetch helper swallows every error, so calling it
+ * from here and from `unlockAudio` still issues one request and cannot reject.
+ */
 export const armAmbience = (): void => {
   ambienceArmed = true;
+  void prefetchAmbience();
   startAmbience();
 };
 
