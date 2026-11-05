@@ -71,5 +71,5 @@ exploit.
 
 - `package-lock.json` is committed, so `npm ci` gives a reproducible build.
 - The app is entirely client-side: it needs no environment variables, no API
-  keys and no server process. All 27 dilemmas, audio and state live in the
+  keys and no server process. All 26 dilemmas, audio and state live in the
   browser bundle.
