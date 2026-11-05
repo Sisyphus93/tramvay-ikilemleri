@@ -85,7 +85,9 @@ const Row: React.FC<RowProps> = ({ label, enabled, volume, onToggle, onVolume, o
         step={1}
         value={pct}
         aria-label={`${label} düzeyi`}
-        aria-valuetext={`${pct}%`}
+        // No aria-valuetext here. It said "41%" while the span immediately to the
+        // right of this slider visibly says "41%", and a range input already
+        // exposes its value, so reading the row announced the same number twice.
         onPointerDown={beginInteraction}
         onKeyDown={beginInteraction}
         onFocus={beginInteraction}
