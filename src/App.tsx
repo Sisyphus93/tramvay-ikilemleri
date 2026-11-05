@@ -106,10 +106,10 @@ const splitQuestion = (question: string): { setup: string; ask: string } => {
     //
     // The colon branch above is deliberately NOT guarded. "5 Yabancı vs. 1
     // Yabancı: ne yaparsın?" (id 1) and "5 Rastgele İzleyici vs. Baş
-    // Moderatörün: modları kullanmanın tam zamanı." (id 12) are the same
+    // Moderatörün: modları kullanmanın tam zamanı." (id 11) are the same
     // construction, and the clause after the colon is the punchline whether or
-    // not it ends in a question mark. Guarding it would make ids 12, 13, 17 and
-    // 27 inconsistent with ids 1, 3 and the rest of the "vs." family.
+    // not it ends in a question mark. Guarding it would make ids 11, 12, 16 and
+    // 26 inconsistent with ids 1, 3 and the rest of the "vs." family.
     if (tail.includes('?')) {
       return {
         setup: normalized.slice(0, cut + 1),
@@ -188,7 +188,7 @@ export default function App() {
   if (!currentDilemma) {
     // Unreachable: currentStep is clamped at every write site. The previous
     // `|| DILEMMAS[0]` fallback failed silently — it rendered a replayed
-    // dilemma 1 under a "28 / 27" header and made the Summary unreachable.
+    // dilemma 1 under a "27 / 26" header and made the Summary unreachable.
     throw new Error(
       `[App] currentStep ${currentStep} is out of range (0..${DILEMMAS.length - 1})`
     );
