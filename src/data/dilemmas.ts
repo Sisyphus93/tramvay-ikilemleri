@@ -119,26 +119,26 @@ export const DILEMMAS: Dilemma[] = [
   {
     "id": 5,
     "title": "5. İkilem: Yaş Farkı",
-    "question": "Tramvay 5 tane 80 yaşında insana gidiyor. Kolu çekersen 1 bebek ölecek. Kalan ömür süresi mi, kurulmuş hayatlar ve anılar mı?",
+    "question": "Tramvay 1 bebeğe doğru gidiyor. Kolu çekersen yan raydaki 80 yaşın üzerindeki 5 insan ölecek. Bir bebeğin önündeki koca ömür için 5 yaşlıyı feda eder misin?",
     "straightTrack": {
-      "label": "5 tane 80 yaşında insan",
-      "count": 5,
-      "entityType": "elderly",
-      "description": "Ana raydaki 5 tane 80 yaşında insan",
-      "isHuman": true
-    },
-    "divertedTrack": {
       "label": "1 bebek",
       "count": 1,
       "entityType": "baby",
-      "description": "Yan raydaki 1 bebek",
+      "description": "Ana raydaki 1 bebek",
       "isHuman": true
     },
-    "straightActionLabel": "Bebeği kurtar",
-    "divertedActionLabel": "5 yaşlı insanı kurtar",
-    "straightCommentary": "Bebek yaşadı; beş yaşlı insan öldü.",
-    "divertedCommentary": "Beş yaşlı insan yaşadı; bebek öldü.",
-    "chatReaction": "Geyik bitti: chat 'kalan ömür süresi' ile 'kurulmuş hayatlar ve anılar' üzerinden karanlık matematik yapıyor.",
+    "divertedTrack": {
+      "label": "80+ yaşında 5 insan",
+      "count": 5,
+      "entityType": "elderly",
+      "description": "Yan raydaki 80 yaşın üzerindeki 5 insan",
+      "isHuman": true
+    },
+    "straightActionLabel": "Müdahale etme",
+    "divertedActionLabel": "Kolu çek (5 yaşlıyı feda et)",
+    "straightCommentary": "Kolu çekmedin; bebek öldü, beş yaşlı insan yaşadı.",
+    "divertedCommentary": "Kolu çektin; beş yaşlı insan öldü, bebek yaşadı.",
+    "chatReaction": "Geyik bitti: chat bir bebeğin önündeki koca ömürle beş insanın yaşanmış hayatlarını tartıyor, karanlık matematik başladı.",
     "twitchEmote": "5HEAD"
   },
   {
