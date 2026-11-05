@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { PlayerHistoryEntry } from '../types.ts';
 import { DILEMMAS } from '../data/dilemmas.ts';
@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Copy,
   Check,
+  X,
   Award,
   ChevronDown,
   ChevronUp,
@@ -31,12 +32,22 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   onRestart,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const reduceMotion = useReducedMotion();
+  /** the "kopyalandı" flash timer, so unmounting cannot set state afterwards */
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     playSummaryReveal();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
   const totalMaterialDamageTL = history.reduce((sum, h) => sum + (h.materialDamageTL || 0), 0);
@@ -56,7 +67,10 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const hasMoreRows = history.length > PREVIEW_ROW_COUNT;
 
   const getArchetype = () => {
-    const leverPullRatio = totalLeverPulls / DILEMMAS.length;
+    // Denominator is the number of rounds actually recorded, not the 27 the game
+    // contains. Identical for a complete run; for a short one, dividing by 27
+    // silently understated the ratio and could select a different archetype.
+    const leverPullRatio = history.length > 0 ? totalLeverPulls / history.length : 0;
     const savedPet = history.find((h) => h.dilemmaId === 11 && !h.leverPulled);
     const killedPet = history.find((h) => h.dilemmaId === 11 && h.leverPulled);
     const killedKolsuz = history.find((h) => h.dilemmaId === 23 && h.leverPulled);
@@ -113,14 +127,60 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const archetype = getArchetype();
 
+  /** Flash the button's result for 2.5 s, then return it to its idle label. */
+  const flashCopyResult = (ok: boolean) => {
+    setCopied(ok);
+    setCopyFailed(!ok);
+    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => {
+      copyTimerRef.current = null;
+      setCopied(false);
+      setCopyFailed(false);
+    }, 2500);
+  };
+
+  /**
+   * Fallback for contexts where the async Clipboard API is unavailable or
+   * refused — most importantly a non-secure origin, where `navigator.clipboard`
+   * is simply undefined.
+   */
+  const copyViaTextarea = (text: string): boolean => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-1000px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
   const handleCopy = () => {
     playSoftTick(1);
-    const text = `ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM\nUnvanım: ${archetype.title} (${archetype.badge})\nToplam zayiat: ${totalDeaths} can kaybı\nMakas tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
+    // history.length, not DILEMMAS.length: the share text states the same ratio
+    // the archetype is computed from, so the two must not disagree on a short
+    // history. Identical for a complete 27-round game.
+    const text = `ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM\nUnvanım: ${archetype.title} (${archetype.badge})\nToplam zayiat: ${totalDeaths} can kaybı\nMakas tercihi: ${history.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
 
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
+    // No feature check and no .catch here used to mean: on a non-secure origin
+    // the property access threw synchronously out of the click handler, and on a
+    // permission denial the promise rejected unhandled. Either way the button
+    // just sat there claiming nothing.
+    const write = navigator.clipboard?.writeText?.(text);
+    if (write) {
+      write
+        .then(() => flashCopyResult(true))
+        .catch(() => flashCopyResult(copyViaTextarea(text)));
+      return;
+    }
+    flashCopyResult(copyViaTextarea(text));
   };
 
   const container = reduceMotion
@@ -155,10 +215,14 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
           <button onClick={handleCopy} data-hover-sound className="btn btn--primary">
             {copied ? (
               <Check className="w-3.5 h-3.5" strokeWidth={3} />
+            ) : copyFailed ? (
+              <X className="w-3.5 h-3.5" strokeWidth={3} />
             ) : (
               <Copy className="w-3.5 h-3.5" strokeWidth={2.5} />
             )}
-            <span>{copied ? 'Panoya kopyalandı' : 'Sicilimi kopyala'}</span>
+            <span aria-live="polite">
+              {copied ? 'Panoya kopyalandı' : copyFailed ? 'Kopyalanamadı' : 'Sicilimi kopyala'}
+            </span>
           </button>
 
           <button
@@ -268,7 +332,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         </div>
 
         <div className="ledger__list">
-          {visibleHistory.map((h, idx) => {
+          {visibleHistory.map((h) => {
             const dilemma = DILEMMAS.find((d) => d.id === h.dilemmaId);
             if (!dilemma) return null;
             const isLever = h.leverPulled;
@@ -282,7 +346,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
                     {dilemma.title.replace(/^\s*\d+\.\s*İkilem:\s*/i, '')}
                   </div>
                   <div className="ledger__choice">
-                    {idx + 1} / {DILEMMAS.length} · {dilemma.conceptualChoice ? 'Kavramsal seçim' : 'Makas kararı'} · {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
+                    {h.dilemmaId} / {DILEMMAS.length} · {dilemma.conceptualChoice ? 'Kavramsal seçim' : 'Makas kararı'} · {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
                   </div>
                 </div>
                 <div className="ledger__cell ledger__cell--save">

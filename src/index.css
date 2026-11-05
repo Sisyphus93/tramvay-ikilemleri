@@ -1349,3 +1349,43 @@ main.screen-main {
 
   .site-footer__inner { flex-direction: column; align-items: flex-start; padding: 12px var(--pad); }
 }
+
+/* ==========================================================================
+   Crash fallback — rendered by ErrorBoundary when a render throws
+   ========================================================================== */
+
+.crash {
+  width: 100%;
+  max-width: 560px;
+  margin: clamp(48px, 14vh, 140px) auto;
+  padding: var(--pad);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  text-align: center;
+}
+
+.crash__kicker {
+  display: block;
+  margin-bottom: 10px;
+  font-size: var(--fs-small);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.crash__title {
+  margin: 0 0 10px;
+  font-size: var(--fs-title);
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.crash__text {
+  margin: 0 0 22px;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.crash .btn { margin-inline: auto; }

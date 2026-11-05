@@ -18,6 +18,45 @@ Render does **not** support `type: static`. It intentionally omits `repo` and
 Blueprint form. If you change the Blueprint's branch later, edit the Blueprint
 in the Render dashboard rather than hard-coding an old branch here.
 
+### Node version
+
+Vite 8 requires Node `^20.19.0 || >=22.12.0`. The floor is declared in the two
+places Render documents:
+
+- `.node-version` → `22.12.0`
+- `package.json` → `engines.node` → `^20.19.0 || >=22.12.0`
+
+`engines` alone only warns (`engine-strict` is not set), so it documents the
+requirement without breaking `npm ci` on an older local Node.
+
+An earlier revision of this branch also set `nodeVersion` in `render.yaml`. That
+key is not a documented Blueprint field, so it was removed rather than risk a
+validation warning or a rejected deploy. `.node-version` and `engines` are the
+documented mechanisms and cover the same ground.
+
+### Cache headers
+
+`render.yaml` sets them in three tiers, and the tiers matter for correctness, not
+just speed:
+
+| Path | `Cache-Control` | Why |
+|---|---|---|
+| `/assets/*` | `public, max-age=31536000, immutable` | Vite content-hashes these, so a new build means new URLs |
+| `/`, `/index.html` | `no-cache` | A stale document would point at assets Render has purged |
+| `/audio/*` | `public, max-age=300, must-revalidate` | **Not** fingerprinted, and `audio.ts` fetches with `cache: 'force-cache'` |
+
+The `/audio/*` tier is the one to be careful with. `sfx.json` (the sprite map) and
+`sfx.ogg` / `sfx.m4a` (the audio it indexes) are separate un-versioned URLs, so a
+long TTL can serve a new sprite map against an old audio file and play the wrong
+slices. Five minutes bounds that window. The alternative — appending a shared
+build hash to every audio URL — removes it entirely but needs a build-time
+injection step; it is not implemented.
+
+`X-Content-Type-Options: nosniff` and `Referrer-Policy` are set globally.
+`X-Frame-Options` is deliberately **not** set: the game is aimed at streamers who
+may embed it, and the page holds no authenticated state for clickjacking to
+exploit.
+
 ## Option B — Manual static site
 
 1. In the Render dashboard: **New** → **Static Site**.

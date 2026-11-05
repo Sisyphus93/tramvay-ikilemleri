@@ -15,3 +15,36 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    # Caching, in three tiers. Getting this wrong is not cosmetic: audio.ts
+    # fetches /audio/* with `cache: 'force-cache'`, so a long TTL on an
+    # un-fingerprinted path can pair a freshly deployed sprite with a stale
+    # sfx.json and play the wrong slices.
+    headers:
+      # Vite content-hashes everything under /assets, so a new build produces
+      # new URLs and these can be cached forever.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # The document must always be revalidated, or a returning player keeps
+      # loading an old index.html that points at assets Render has purged.
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /
+        name: Cache-Control
+        value: no-cache
+      # Not fingerprinted, so a short TTL with must-revalidate: long enough to
+      # survive one play session, short enough that a deploy cannot leave a
+      # stale sprite paired with a new sfx.json for more than a few minutes.
+      - path: /audio/*
+        name: Cache-Control
+        value: public, max-age=300, must-revalidate
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      # X-Frame-Options is deliberately NOT set. The game is aimed at streamers,
+      # who may legitimately embed it; SAMEORIGIN would break that, and a
+      # clickjacking header buys nothing for a page with no authenticated state.

@@ -6,11 +6,26 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Dilemma, Decision, TrackTarget, TrackEntityType } from '../types.ts';
 
+/**
+ * Identity of one tram animation run, handed to the canvas *by reference*.
+ *
+ * `AnimatePresence mode="wait"` keeps the exiting `playing` subtree mounted for
+ * its whole 0.5 s exit, and that subtree is frozen with the props it already
+ * had — a restart cannot reach it by passing a new prop value. Mutating this
+ * object does reach it, which is what makes cancellation possible.
+ */
+export interface TramRun {
+  id: number;
+  cancelled: boolean;
+}
+
 interface TrolleyCanvasProps {
   dilemma: Dilemma;
   decision: Decision | null;
   isAnimating: boolean;
-  onAnimationEnd: () => void;
+  /** the run this animation belongs to; checked on every frame */
+  run: TramRun;
+  onAnimationEnd: (run: TramRun) => void;
   leverPulled: boolean;
   onLeverToggle: () => void;
 }
@@ -108,6 +123,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
   dilemma,
   decision,
   isAnimating,
+  run,
   onAnimationEnd,
   leverPulled,
   onLeverToggle,
@@ -133,6 +149,13 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
       const startTime = performance.now();
 
       const animate = (now: number) => {
+        // A restart or an advance can cancel this run while the subtree is
+        // still mounted for its exit animation. A cancelled run must not move
+        // the tram, fire the impact, or reveal a verdict for a decision the
+        // player abandoned — the props and the onAnimationEnd closure this
+        // frame sees are all pre-restart.
+        if (run.cancelled) return;
+
         const elapsed = now - startTime;
         const p = Math.min(1, elapsed / duration);
         setTramProgress(easeInOutCubic(p));
@@ -146,7 +169,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
           animRef.current = requestAnimationFrame(animate);
         } else if (!endedFiredRef.current) {
           endedFiredRef.current = true;
-          onAnimationEnd();
+          onAnimationEnd(run);
         }
       };
 
@@ -158,7 +181,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
 
     setTramProgress(0);
     setImpactHappened(false);
-  }, [isAnimating, decision, onAnimationEnd]);
+  }, [isAnimating, decision, run, onAnimationEnd]);
 
   const tramPosition = (p: number, path: Decision) => {
     if (p <= 0.3) {
@@ -616,6 +639,12 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
             onKeyDown={(e) => {
               if (!isAnimating && (e.key === 'Enter' || e.key === ' ')) {
                 e.preventDefault();
+                // Space is also a global shortcut: App's window keydown handler
+                // toggles the lever too. preventDefault does not stop that
+                // listener, so one keypress toggled twice and cancelled itself
+                // out — aria-pressed never changed and two clacks played.
+                // Scoped to this branch so `m` still reaches the global handler.
+                e.stopPropagation();
                 onLeverToggle();
               }
             }}

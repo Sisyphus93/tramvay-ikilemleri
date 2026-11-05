@@ -27,8 +27,9 @@ import {
   fadeOutOutcome,
   stopAllCues,
   armAmbience,
+  disarmAmbience,
 } from './utils/audio.ts';
-import { getTramAnimationSeconds } from './components/TrolleyCanvas.tsx';
+import { getTramAnimationSeconds, TramRun } from './components/TrolleyCanvas.tsx';
 
 type GameState = 'TITLE' | 'PLAYING' | 'SUMMARY';
 
@@ -99,6 +100,20 @@ export default function App() {
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** guards against a second onAnimationEnd (and duplicate history rows) */
   const verdictGuardRef = useRef(false);
+  /**
+   * One advance per verdict. The verdict card stays mounted — and its button
+   * stays clickable — for the whole CONTROL_SWAP_MS exit, so a second click
+   * (or a click plus an Enter keypress) used to run handleNextDilemma twice
+   * and skip a dilemma.
+   */
+  const advancingRef = useRef(false);
+  /**
+   * The live tram animation run. The object is handed to the canvas by
+   * reference and only ever *replaced* when a new run starts, so mutating
+   * `cancelled` reaches a subtree that is frozen mid-exit with the old props.
+   * Starts cancelled: nothing may fire before the first decision.
+   */
+  const runRef = useRef<TramRun>({ id: 0, cancelled: true });
 
   const clearRevealTimer = useCallback(() => {
     if (revealTimerRef.current !== null) {
@@ -134,7 +149,15 @@ export default function App() {
     if (next) playSwitch();
   }, [soundEnabled]);
 
-  const currentDilemma = DILEMMAS[currentStep] || DILEMMAS[0];
+  const currentDilemma = DILEMMAS[currentStep];
+  if (!currentDilemma) {
+    // Unreachable: currentStep is clamped at every write site. The previous
+    // `|| DILEMMAS[0]` fallback failed silently — it rendered a replayed
+    // dilemma 1 under a "28 / 27" header and made the Summary unreachable.
+    throw new Error(
+      `[App] currentStep ${currentStep} is out of range (0..${DILEMMAS.length - 1})`
+    );
+  }
 
   const handleStart = useCallback(() => {
     // Synchronous inside the gesture: this is the only place an AudioContext is born.
@@ -142,6 +165,13 @@ export default function App() {
     // the ambience bed only runs during the game
     armAmbience();
     playPress();
+    // A new game always opens on the choice board. handleRestart already
+    // clears these, but nothing else stands between TITLE and PLAYING, so
+    // reset them here instead of trusting whichever exit path got us back.
+    runRef.current.cancelled = true;
+    setDecision(null);
+    setIsAnimating(false);
+    setShowResult(false);
     setGameState('PLAYING');
   }, []);
 
@@ -164,8 +194,13 @@ export default function App() {
 
       clearRevealTimer();
       verdictGuardRef.current = false;
+      // a new round starts: the next verdict may be advanced again
+      advancingRef.current = false;
       // a still-ringing impact or stamp from the previous round dies here
       fadeOutOutcome();
+      // a fresh run identity, so any animation left over from a previous round
+      // (or from a subtree still exiting) can no longer claim to be current
+      runRef.current = { id: runRef.current.id + 1, cancelled: false };
       setDecision(dec);
       setIsAnimating(true);
       setShowResult(false);
@@ -181,7 +216,11 @@ export default function App() {
    * the result screen appears on the stamp. Controls stay locked meanwhile
    * because `isAnimating` is still true.
    */
-  const handleAnimationEnd = useCallback(() => {
+  const handleAnimationEnd = useCallback((run: TramRun) => {
+    // The caller may be a subtree frozen mid-exit, still holding this closure
+    // from before a restart or an advance. Its `decision`, `currentDilemma` and
+    // `gameState` are all stale, so reject anything that is not the live run.
+    if (run !== runRef.current || run.cancelled) return;
     if (verdictGuardRef.current) return;
     verdictGuardRef.current = true;
 
@@ -217,12 +256,18 @@ export default function App() {
   useEffect(() => () => clearRevealTimer(), [clearRevealTimer]);
 
   const handleNextDilemma = useCallback(() => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+
     clearRevealTimer();
     verdictGuardRef.current = false;
+    // the round being left behind must not report its impact any more
+    runRef.current.cancelled = true;
     // never let a long comic crash (1.2 s) bleed into the next dilemma
     fadeOutOutcome();
     if (currentStep < DILEMMAS.length - 1) {
-      setCurrentStep((prev) => prev + 1);
+      // clamped, so currentStep can never leave 0..DILEMMAS.length - 1
+      setCurrentStep((prev) => Math.min(prev + 1, DILEMMAS.length - 1));
       setDecision(null);
       setLeverPulled(false);
       setShowResult(false);
@@ -237,10 +282,17 @@ export default function App() {
   const handleRestart = useCallback(() => {
     clearRevealTimer();
     verdictGuardRef.current = false;
+    advancingRef.current = false;
+    // Cancel the abandoned run. The exiting subtree is frozen with its old
+    // props and keeps animating, so without this it would fire the impact and
+    // reveal a verdict for a decision the player just walked away from.
+    runRef.current.cancelled = true;
     // sweep first, then play the page-turn: it used to be stopped an instant
     // after it started, so restart was silent
     fadeOutOutcome();
     stopAllCues();
+    // the bed must not keep looping on the title screen we are returning to
+    disarmAmbience();
     playPaper();
     setCurrentStep(0);
     setDecision(null);
@@ -266,23 +318,53 @@ export default function App() {
     [isAnimating, showResult, leverPulled]
   );
 
+  /**
+   * One advance, shared by the Next button and the keyboard path, so advancing
+   * with a key plays the same paper cue as advancing with a click.
+   */
+  const advance = useCallback(() => {
+    playPaper();
+    handleNextDilemma();
+  }, [handleNextDilemma]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Browser and OS combos are never game keys.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       // focus inside the audio-settings popover: arrows/space adjust the
       // sliders and toggles, they must not play the game. M stays global.
       const origin = e.target as Element | null;
       const isMuteKey = e.key === 'm' || e.key === 'M';
       if (!isMuteKey && origin?.closest?.('.audio-settings')) return;
 
-      if (e.key === 'm' || e.key === 'M') {
+      if (isMuteKey) {
         toggleSound();
-      } else if (gameState === 'TITLE' && (e.key === 'Enter' || e.key === ' ')) {
+        return;
+      }
+
+      // A focused control owns Enter and Space: let it activate natively rather
+      // than hijacking the keypress for a game action. Without this, Space on
+      // the mute pill, a choice button or Restart also toggled the lever, and
+      // Enter on the Next button advanced without its paper cue. The number,
+      // arrow and L keys stay global — no control claims those.
+      const isActivationKey = e.key === 'Enter' || e.key === ' ';
+      if (
+        isActivationKey &&
+        origin?.closest?.(
+          'button, a, input, select, textarea, [contenteditable], [role="slider"], [role="button"]'
+        )
+      ) {
+        return;
+      }
+
+      if (gameState === 'TITLE' && isActivationKey) {
         e.preventDefault();
         handleStart();
       } else if (gameState === 'PLAYING') {
-        if (showResult && (e.key === 'Enter' || e.key === ' ')) {
+        if (showResult && isActivationKey) {
           e.preventDefault();
-          handleNextDilemma();
+          advance();
         } else if (!isAnimating && !showResult) {
           if (e.key === '1' || e.key === 'ArrowLeft') {
             handleMakeDecision('straight');
@@ -302,7 +384,7 @@ export default function App() {
     gameState,
     showResult,
     isAnimating,
-    handleNextDilemma,
+    advance,
     handleMakeDecision,
     handleLeverToggle,
     toggleSound,
@@ -400,6 +482,7 @@ export default function App() {
                             dilemma={currentDilemma}
                             decision={decision}
                             isAnimating={isAnimating}
+                            run={runRef.current}
                             onAnimationEnd={handleAnimationEnd}
                             leverPulled={leverPulled}
                             onLeverToggle={handleLeverToggle}
@@ -454,7 +537,7 @@ export default function App() {
                           <ResultOverlay
                             dilemma={currentDilemma}
                             decision={decision || 'straight'}
-                            onNext={handleNextDilemma}
+                            onNext={advance}
                             isLast={currentStep === DILEMMAS.length - 1}
                           />
                         </motion.div>
