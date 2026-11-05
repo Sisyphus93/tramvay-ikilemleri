@@ -6,7 +6,7 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Dilemma, Decision } from '../types.ts';
-import { ArrowRight, MessageSquare, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface ResultOverlayProps {
   dilemma: Dilemma;
@@ -25,9 +25,6 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
 }) => {
   const reduceMotion = useReducedMotion();
   const leverPulled = decision === 'diverted';
-  const commentary = leverPulled
-    ? dilemma.divertedCommentary
-    : dilemma.straightCommentary;
 
   const savedTarget = leverPulled ? dilemma.straightTrack : dilemma.divertedTrack;
   const lostTarget = leverPulled ? dilemma.divertedTrack : dilemma.straightTrack;
@@ -98,16 +95,6 @@ export const ResultOverlay: React.FC<ResultOverlayProps> = ({
           </div>
         </motion.div>
 
-        <motion.blockquote variants={item} className="verdict__quote">
-          “{commentary}”
-        </motion.blockquote>
-
-        <motion.div variants={item} className="verdict__chat">
-          <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" strokeWidth={2.2} />
-          <span>
-            <b>Sohbet:</b> {dilemma.chatReaction.replace(/^Chat:\s*/i, '')}
-          </span>
-        </motion.div>
 
         <motion.div variants={item} className="verdict__actions">
           <span className="verdict__next-hint">
