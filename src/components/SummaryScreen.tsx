@@ -67,7 +67,10 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const hasMoreRows = history.length > PREVIEW_ROW_COUNT;
 
   const getArchetype = () => {
-    const leverPullRatio = totalLeverPulls / DILEMMAS.length;
+    // Denominator is the number of rounds actually recorded, not the 27 the game
+    // contains. Identical for a complete run; for a short one, dividing by 27
+    // silently understated the ratio and could select a different archetype.
+    const leverPullRatio = history.length > 0 ? totalLeverPulls / history.length : 0;
     const savedPet = history.find((h) => h.dilemmaId === 11 && !h.leverPulled);
     const killedPet = history.find((h) => h.dilemmaId === 11 && h.leverPulled);
     const killedKolsuz = history.find((h) => h.dilemmaId === 23 && h.leverPulled);
@@ -326,7 +329,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
         </div>
 
         <div className="ledger__list">
-          {visibleHistory.map((h, idx) => {
+          {visibleHistory.map((h) => {
             const dilemma = DILEMMAS.find((d) => d.id === h.dilemmaId);
             if (!dilemma) return null;
             const isLever = h.leverPulled;
@@ -340,7 +343,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
                     {dilemma.title.replace(/^\s*\d+\.\s*İkilem:\s*/i, '')}
                   </div>
                   <div className="ledger__choice">
-                    {idx + 1} / {DILEMMAS.length} · {dilemma.conceptualChoice ? 'Kavramsal seçim' : 'Makas kararı'} · {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
+                    {h.dilemmaId} / {DILEMMAS.length} · {dilemma.conceptualChoice ? 'Kavramsal seçim' : 'Makas kararı'} · {isLever ? dilemma.divertedActionLabel : dilemma.straightActionLabel}
                   </div>
                 </div>
                 <div className="ledger__cell ledger__cell--save">
