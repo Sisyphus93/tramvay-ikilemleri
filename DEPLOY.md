@@ -20,15 +20,19 @@ in the Render dashboard rather than hard-coding an old branch here.
 
 ### Node version
 
-Vite 8 requires Node `^20.19.0 || >=22.12.0`. The floor is declared in three
-places so a build-image change cannot silently break the deploy:
+Vite 8 requires Node `^20.19.0 || >=22.12.0`. The floor is declared in the two
+places Render documents:
 
-- `render.yaml` → `nodeVersion: 22.12.0`
 - `.node-version` → `22.12.0`
-- `package.json` → `engines.node`
+- `package.json` → `engines.node` → `^20.19.0 || >=22.12.0`
 
 `engines` alone only warns (`engine-strict` is not set), so it documents the
 requirement without breaking `npm ci` on an older local Node.
+
+An earlier revision of this branch also set `nodeVersion` in `render.yaml`. That
+key is not a documented Blueprint field, so it was removed rather than risk a
+validation warning or a rejected deploy. `.node-version` and `engines` are the
+documented mechanisms and cover the same ground.
 
 ### Cache headers
 

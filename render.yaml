@@ -6,10 +6,6 @@ services:
   - type: web
     runtime: static
     name: tramvay-ikilemleri
-    # Vite 8 needs Node ^20.19.0 || >=22.12.0. Pinned so a change in Render's
-    # default build image cannot silently break `npm run build`. The same floor
-    # is declared in package.json `engines` and in `.node-version`.
-    nodeVersion: 22.12.0
     # `repo` and `branch` are intentionally omitted: Render uses the repo and
     # branch selected for this Blueprint, so it works on main or any branch.
     buildCommand: npm ci && npm run build
