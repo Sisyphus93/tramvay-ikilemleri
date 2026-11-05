@@ -173,7 +173,6 @@ interface Engine {
   sfxBuffer: AudioBuffer | null;
   ambienceBuffer: AudioBuffer | null;
   sprite: SpriteMap;
-  format: string | null;
 }
 
 let engine: Engine | null = null;
@@ -412,16 +411,6 @@ export const setSfxVolume = (next: number): void => {
   rampGain(engine.sfxUserGain.gain, sfxEnabled ? sfxVolume : 0, 0.06);
 };
 
-/* ---- legacy single-volume API, kept for older call sites ---- */
-
-export const getVolume = (): number => getSfxVolume();
-
-/** Legacy master volume: sets both sliders. */
-export const setVolume = (next: number): void => {
-  setAmbienceVolume(next);
-  setSfxVolume(next);
-};
-
 /* ------------------------------------------------------------------ *
  * Boot
  * ------------------------------------------------------------------ */
@@ -648,7 +637,6 @@ function buildGraph(ctx: Ctx): Engine {
     sfxBuffer: null,
     ambienceBuffer: null,
     sprite: { ...FALLBACK_SLICES },
-    format: null,
   };
 }
 
@@ -1217,59 +1205,13 @@ export const stopAllCues = (): void => {
 };
 
 /* ------------------------------------------------------------------ *
- * Legacy aliases — kept so older call sites keep working
+ * Legacy aliases still in use — SummaryScreen only
  * ------------------------------------------------------------------ */
 
-/** The stamp replaces the old reveal chime. */
-export const playRevealChime = (): void => {};
-
-/** The stamp replaces the old foil sweep. */
-export const playFoilSweep = (): void => {};
-
-export const startMusicBed = (): void => {
-  startAmbience();
-};
-
-export const stopMusicBed = (): void => {
-  if (!engine) return;
-  try {
-    const now = engine.ctx.currentTime;
-    engine.ambienceDuck.gain.cancelScheduledValues(now);
-    engine.ambienceBus.gain.cancelScheduledValues(now);
-    engine.ambienceBus.gain.setTargetAtTime(0.0001, now, 0.4);
-  } catch {
-    /* ignore */
-  }
-};
-
-export const duckMusicBed = (duck: boolean): void => {
-  duckAmbience(duck ? 0.3 : 1, 0.3);
-};
-
-export const playSwitchLight = playSwitch;
-export const playLeverSnap = playSwitch;
-export const playTinyClick = playSwitch;
 export const playSoftTick = (_step = 0): void => {
   playSwitch();
 };
-export const playPaperSwish = playPaper;
-export const playPremiumTransition = playPaper;
-export const playPencilScratch = playPaper;
-export const playSonicSignatureMotif = (): void => {
-  playSprite('bell', { gain: 0.45 });
-};
-export const playDecisionWhoosh = (): void => {
-  playSprite('air_brake', { gain: 0.4 });
-};
-export const playRisingSweep = (): void => {
-  playSprite('drone', { gain: 0.22 });
-};
-export const playLowThump = (): void => {
-  playSprite('impact_muffled', { gain: 0.55, rate: jitterRate() });
-};
-export const playChordSwell = (): void => {
-  playSprite('drone', { gain: 0.4 });
-};
+
 /** Summary payoff: the single stamp. */
 export const playSummaryReveal = (): void => {
   playSprite('stamp', { gain: 0.9, rate: jitterRate(), tag: OUTCOME_STAMP });
