@@ -39,7 +39,7 @@ export const TrolleyHeader: React.FC<TrolleyHeaderProps> = ({
       <div className="site-header__inner">
         <div className="brand">
           <span className="brand__mark" aria-hidden="true">
-            27
+            26
           </span>
           <span className="brand__name">
             Absürt Tramvay <em>İkilemleri</em>

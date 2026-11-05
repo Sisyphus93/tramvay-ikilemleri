@@ -42,7 +42,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
           </h1>
 
           <p className="poster__lede">
-            27 ikilemlik interaktif bir felsefe oyunu. Tramvay geliyor, iki ray var ve
+            26 ikilemlik interaktif bir felsefe oyunu. Tramvay geliyor, iki ray var ve
             doğru cevap yok; her karar senin siciline yazılıyor.
           </p>
 
@@ -77,7 +77,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({ onStart }) => {
 
           <div className="poster__epigraph">
             <p>“Kolu çekmek ya da çekmemek… işte bütün mesele bu.”</p>
-            <span>27 ikilem · tek makas · Türkçe</span>
+            <span>26 ikilem · tek makas · Türkçe</span>
           </div>
         </aside>
       </div>
@@ -189,7 +189,7 @@ const PosterArt: React.FC<{ reduceMotion: boolean; isMobile: boolean }> = ({
           fill="#ffffff"
           style={{ fontFamily: 'Archivo, sans-serif', fontSize: 13, fontWeight: 700 }}
         >
-          27
+          26
         </text>
 
         {/* Mechanical lever — cleanly framed in lower-left */}
@@ -289,7 +289,7 @@ const PosterArt: React.FC<{ reduceMotion: boolean; isMobile: boolean }> = ({
         fill="#ffffff"
         style={{ fontFamily: 'Archivo, sans-serif', fontSize: 14, fontWeight: 700 }}
       >
-        27
+        26
       </text>
 
       {/* Mechanical lever */}

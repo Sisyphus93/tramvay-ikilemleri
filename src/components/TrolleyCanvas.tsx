@@ -699,7 +699,7 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
               fill={PAPER}
               style={{ fontFamily: 'Archivo, sans-serif', fontSize: 12, fontWeight: 700 }}
             >
-              27
+              26
             </text>
 
             {/* Wheels */}
