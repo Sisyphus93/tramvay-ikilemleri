@@ -16,7 +16,8 @@
     "audio:package": "node scripts/package-audio.mjs",
     "audio:build": "node scripts/generate-audio.mjs && node scripts/package-audio.mjs",
     "audio:verify": "node scripts/verify-audio.mjs",
-    "audio:e2e": "node arena-verify/audio-e2e.mjs . && node arena-verify/audio-e2e.mjs . missing-json && node arena-verify/audio-e2e.mjs . missing-sprite"
+    "audio:e2e": "node arena-verify/audio-e2e.mjs . && node arena-verify/audio-e2e.mjs . missing-json && node arena-verify/audio-e2e.mjs . missing-sprite",
+    "audit:data": "node scripts/audit-dilemmas.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
