@@ -285,7 +285,18 @@ const VARIANTS = {
 
 const results = [];
 function record(name, check, value, pass, note = '') {
-  results.push({ name, check, value, pass, note });
+  results.push({ name, check, value, pass, note, skipped: false });
+}
+
+/**
+ * A check that could not run at all. Deliberately not a pass.
+ *
+ * Recording an unrun check as passing is what let the -26 LUFS requirement go
+ * unenforced on any machine without ffmpeg while the script still printed a
+ * perfect score and exited 0.
+ */
+function recordSkipped(name, check, value, note = '') {
+  results.push({ name, check, value, pass: null, note, skipped: true });
 }
 
 /* ------------------------------------------------------------------ *
@@ -506,7 +517,16 @@ function main() {
     if (lufs && Number.isFinite(lufs.I)) {
       record('ambience', 'loudness within ±2 LU of -26', `${lufs.I.toFixed(2)} LUFS`, Math.abs(lufs.I + 26) <= 2);
     } else {
-      record('ambience', 'loudness (ffmpeg unavailable)', 'RMS fallback', true, 'skipped');
+      // The old value here read "RMS fallback", but there is no RMS fallback for
+      // loudness -- RMS is not LUFS and nothing else measures it.
+      recordSkipped(
+        'ambience',
+        'loudness within ±2 LU of -26',
+        'not measured',
+        findFfmpeg()
+          ? 'ffmpeg is present but returned no parsable loudness'
+          : 'ffmpeg not on PATH; the -26 LUFS requirement is UNVERIFIED',
+      );
     }
     // no DC
     record('ambience', 'DC offset', dcOf(x).toFixed(6), Math.abs(dcOf(x)) < 1e-3);
@@ -526,18 +546,32 @@ function main() {
   }
 
   /* ---- print table ---- */
-  const failed = results.filter((r) => !r.pass);
+  // `pass === false`, not `!pass`: a skipped check has pass === null and must
+  // not be counted as a failure either.
+  const failed = results.filter((r) => r.pass === false);
+  const skipped = results.filter((r) => r.skipped);
+  const passed = results.filter((r) => r.pass === true);
   const nameW = Math.max(...results.map((r) => r.name.length), 4);
   const checkW = Math.max(...results.map((r) => r.check.length), 5);
   const valW = Math.max(...results.map((r) => String(r.value).length), 5);
   console.log(`\n${'sound'.padEnd(nameW)}  ${'check'.padEnd(checkW)}  ${'value'.padEnd(valW)}  ok`);
   console.log('-'.repeat(nameW + checkW + valW + 8));
   for (const r of results) {
+    const verdict = r.skipped ? 'SKIP' : r.pass ? 'PASS' : 'FAIL';
     console.log(
-      `${r.name.padEnd(nameW)}  ${r.check.padEnd(checkW)}  ${String(r.value).padEnd(valW)}  ${r.pass ? 'PASS' : 'FAIL'}`,
+      `${r.name.padEnd(nameW)}  ${r.check.padEnd(checkW)}  ${String(r.value).padEnd(valW)}  ${verdict}`,
     );
   }
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
+  console.log(
+    `\n${passed.length} passed, ${skipped.length} skipped, ${failed.length} failed` +
+      ` (of ${results.length} checks)`,
+  );
+  if (skipped.length) {
+    console.warn(`\n${skipped.length} SKIPPED CHECK(S) — not verified, and not counted as passing:`);
+    for (const s of skipped) {
+      console.warn(`  - ${s.name}: ${s.check}${s.note ? ` (${s.note})` : ''}`);
+    }
+  }
   if (failed.length) {
     console.error(`\n${failed.length} FAILING CHECK(S):`);
     for (const f of failed) console.error(`  - ${f.name}: ${f.check} => ${f.value}`);
