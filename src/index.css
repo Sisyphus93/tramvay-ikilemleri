@@ -97,10 +97,22 @@ button:disabled { cursor: not-allowed; }
 
 .app-shell {
   position: relative;
-  min-height: 100dvh;
+  /* Base value only. The dvh upgrade lives in the @supports block below, NOT as a
+     second `min-height` in this rule: the CSS minifier collapses duplicate
+     declarations in one rule down to the last one, so writing
+     `min-height: 100vh; min-height: 100dvh;` here ships as `min-height: 100dvh`
+     and the fallback is silently deleted from dist. */
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--ground);
+}
+
+/* dvh excludes the mobile URL bar, so it is the better height where supported. */
+@supports (height: 100dvh) {
+  .app-shell {
+    min-height: 100dvh;
+  }
 }
 
 .site-header {
@@ -746,6 +758,21 @@ main.screen-main {
 
 .blueprint-lever__plate { fill: var(--raised); }
 
+/* The lever is an SVG <g role="button" tabindex="0">, so the global
+   :focus-visible rule above is not enough: browsers do not reliably paint
+   `outline` on SVG child elements. Draw the ring with SVG paint as well, which
+   works wherever strokes work. */
+.blueprint-lever:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.blueprint-lever:focus-visible .blueprint-lever__plate {
+  fill: var(--sunken);
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
 .blueprint-tram-trail line { stroke: var(--ink); stroke-width: 3; opacity: .35; }
 
 .blueprint-medallion--hit .blueprint-medallion__shake { transform: translate(1px, 0); }
@@ -1220,9 +1247,21 @@ main.screen-main {
     border-radius: 0 0 var(--radius-card) var(--radius-card);
   }
 
+  /* Without aspect-ratio support this would collapse: `height: auto` on the
+     masthead plus `.poster__masthead svg { height: 100% }` resolves to nothing.
+     So give it a real height first, then upgrade inside @supports. 760/360 is
+     ~47.4% of the width, and the masthead is 100vw wide here. @supports is safe
+     to rely on for this: it shipped years before aspect-ratio, and a browser old
+     enough to lack @supports ignores the block and keeps the fallback height. */
   .poster__masthead {
-    height: auto;
-    aspect-ratio: 760 / 360;
+    height: clamp(180px, 47.4vw, 300px);
+  }
+
+  @supports (aspect-ratio: 760 / 360) {
+    .poster__masthead {
+      height: auto;
+      aspect-ratio: 760 / 360;
+    }
   }
 
   .poster__grid { gap: 20px; padding: 20px 0 18px; }

@@ -44,6 +44,22 @@ const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 const CONTROL_SWAP_MS = 360;
 
 /**
+ * Return to the top of the page between screens.
+ *
+ * `behavior: 'smooth'` is an animated scroll, which is a vestibular trigger, so
+ * it has to respect prefers-reduced-motion the same way the animations already
+ * do. All three call sites (advance, advance-to-summary, restart) used to
+ * hard-code 'smooth'.
+ *
+ * `useReducedMotion()` resolves to `null` until the preference is known, which is
+ * falsy and therefore animates -- matching how the rest of this file treats it.
+ */
+const scrollToTop = (reduceMotion: boolean | null): void => {
+  if (typeof window === 'undefined') return;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+};
+
+/**
  * Dilemmas read as "setup. question?" or "setup: prompt." — splitting them
  * lets the final ask carry the visual weight while preserving original punctuation.
  */
@@ -77,10 +93,29 @@ const splitQuestion = (question: string): { setup: string; ask: string } => {
     };
   }
   if (cut > 20) {
-    return {
-      setup: normalized.slice(0, cut + 1),
-      ask: normalized.slice(cut + 2),
-    };
+    const tail = normalized.slice(cut + 2);
+    // Only promote the tail when it really is the ask.
+    //
+    // Ids 20-25 are two setup sentences with no question mark anywhere:
+    // "Tramvay <straight track> gidiyor. Kolu çekersen <diverted track> ezecek."
+    // Cutting at the last period put the consequence clause in the heavy
+    // .q__ask (ink, weight 800) and left the situation clause in the muted
+    // .q__setup (weight 500), so the two halves of one symmetric setup rendered
+    // at different weights and the heavier one was not a question. Fall through
+    // to the unsplit return below and let the whole thing carry one weight.
+    //
+    // The colon branch above is deliberately NOT guarded. "5 Yabancı vs. 1
+    // Yabancı: ne yaparsın?" (id 1) and "5 Rastgele İzleyici vs. Baş
+    // Moderatörün: modları kullanmanın tam zamanı." (id 12) are the same
+    // construction, and the clause after the colon is the punchline whether or
+    // not it ends in a question mark. Guarding it would make ids 12, 13, 17 and
+    // 27 inconsistent with ids 1, 3 and the rest of the "vs." family.
+    if (tail.includes('?')) {
+      return {
+        setup: normalized.slice(0, cut + 1),
+        ask: tail,
+      };
+    }
   }
   return { setup: '', ask: normalized };
 };
@@ -272,12 +307,12 @@ export default function App() {
       setLeverPulled(false);
       setShowResult(false);
       setIsAnimating(false);
-      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop(reduceMotion);
     } else {
       setGameState('SUMMARY');
-      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop(reduceMotion);
     }
-  }, [currentStep, clearRevealTimer]);
+  }, [currentStep, clearRevealTimer, reduceMotion]);
 
   const handleRestart = useCallback(() => {
     clearRevealTimer();
@@ -301,8 +336,8 @@ export default function App() {
     setIsAnimating(false);
     setHistory([]);
     setGameState('TITLE');
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [clearRevealTimer]);
+    scrollToTop(reduceMotion);
+  }, [clearRevealTimer, reduceMotion]);
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
 

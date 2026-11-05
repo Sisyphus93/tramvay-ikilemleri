@@ -25,7 +25,24 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..');
-const { JSDOM } = require('/tmp/e2e/node_modules/jsdom');
+// jsdom is a devDependency, so `npm ci` in the repo root provides it. This used to
+// require a hard-coded path into /tmp/e2e, a directory that only ever existed on
+// the machine the harness was first written on.
+//
+// Wording in this file is not free, either: Tailwind v4 scans every path that is
+// not gitignored, this harness included, and emits a utility for any candidate it
+// recognises. A prose word here that happens to name a utility ends up in the
+// shipped CSS bundle. (Recorded in the commit message rather than spelled out
+// here, because spelling it out reproduces it.)
+let JSDOM;
+try {
+  ({ JSDOM } = require('jsdom'));
+} catch {
+  process.stderr.write(
+    'audio-e2e.mjs needs jsdom, which is a devDependency: run `npm ci` (or `npm install`) in the repository root first.\n',
+  );
+  process.exit(1);
+}
 const { build: buildAsync } = require(join(repo, 'node_modules/esbuild/lib/main.js'));
 
 const [rootArg, mode = 'normal'] = process.argv.slice(2);
@@ -35,6 +52,23 @@ const PUBLIC = join(root, 'public');
 
 const log = [];
 const record = (msg) => log.push(msg);
+
+/**
+ * Verdict for a check whose normal-mode expectation is that a cue PLAYS.
+ *
+ * In missing-sprite mode every sprite format is served as HTML, audio.ts logs
+ * "Could not load the SFX sprite; effects will be silent", and that silence IS the
+ * behaviour under test. Labelling it FAIL -- as this harness did, on five separate
+ * checks -- made a passing mode look broken, and would have hidden the opposite
+ * regression: a cue somehow playing when nothing could have decoded.
+ */
+const spritesAvailable = mode !== 'missing-sprite';
+const cueVerdict = (observed, normalOk) => {
+  if (spritesAvailable) return normalOk ? 'PASS' : 'FAIL';
+  return observed === 0
+    ? 'PASS (silent, which is what this mode requires)'
+    : 'FAIL (a cue played although every sprite format 404s in this mode)';
+};
 
 /* ---------- virtual clock ---------- */
 let now = 0;
@@ -271,13 +305,21 @@ const { window } = dom;
 
 window.AudioContext = MockAudioContext;
 window.fetch = (url) => mockFetch(url);
+// A real id per frame, and a cancelAnimationFrame that actually removes it.
+// Returning a constant 1 with a no-op cancel meant a frame the app (or
+// framer-motion) had explicitly cancelled still ran on the next advanceTo(), so
+// the virtual clock could execute work that was thrown away, and any test of
+// "this animation was cancelled" was meaningless.
 window.requestAnimationFrame = (cb) => {
-  const entry = { at: now + 16, fn: cb };
+  const entry = { id: nextId++, at: now + 16, fn: cb };
   rafQueue.push(entry);
   rafQueue.sort((a, b) => a.at - b.at);
-  return 1;
+  return entry.id;
 };
-window.cancelAnimationFrame = () => {};
+window.cancelAnimationFrame = (id) => {
+  const i = rafQueue.findIndex((r) => r.id === id);
+  if (i >= 0) rafQueue.splice(i, 1);
+};
 Object.defineProperty(window.performance, 'now', { value: () => now, configurable: true });
 window.setTimeout = (fn, ms) => {
   const id = nextId++;
@@ -355,6 +397,26 @@ const wait = async (ms) => {
 };
 
 const doc = window.document;
+
+/**
+ * Dispatch a keydown the way a browser delivers it: on the element that has focus,
+ * bubbling up to the window listener.
+ *
+ * Dispatching straight on `window` made event.target the window itself, which
+ * silently skipped every target-based guard in App's keydown handler -- a focused
+ * control owns Enter and Space, and every key except M is swallowed while focus is
+ * inside .audio-settings. Both guards existed in the app and neither was exercised.
+ *
+ * Pass `target` explicitly when the check is about something other than the focused
+ * element; the mute check below does exactly that.
+ */
+const pressKey = (key, target) => {
+  const focused = doc.activeElement;
+  const el = target || (focused && focused !== doc.documentElement ? focused : doc.body);
+  el.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  return el;
+};
+
 const keyListeners = [];
 const origAdd = window.addEventListener.bind(window);
 window.addEventListener = (type, fn, opts) => {
@@ -404,10 +466,10 @@ async function main() {
   /* --- 3. lever toggle by keyboard, exactly one switch per press,
          and clicking the SVG lever does the same thing exactly once --- */
   let before = spriteStarts().length;
-  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ' }));
+  pressKey(' ');
   await wait(300);
   const afterSpace = spriteStarts().length - before;
-  record(`space (lever toggle) fired ${afterSpace} sfx ${afterSpace === 1 ? 'PASS' : 'FAIL'}`);
+  record(`space (lever toggle) fired ${afterSpace} sfx ${cueVerdict(afterSpace, afterSpace === 1)}`);
 
   const lever = doc.querySelector('.blueprint-lever');
   before = spriteStarts().length;
@@ -416,14 +478,16 @@ async function main() {
   const afterLever = spriteStarts().length - before;
   record(
     `lever click (mouse) fired ${afterLever} sfx ${
-      lever ? (afterLever === 1 ? 'PASS' : 'FAIL') : 'SKIP (SVG lever not mounted in jsdom: motion exit animation never settles)'
+      lever
+        ? cueVerdict(afterLever, afterLever === 1)
+        : 'SKIP (SVG lever not mounted in jsdom: motion exit animation never settles)'
     }`,
   );
 
   /* --- 4. decision: straight (key 1) --- */
   const keyAt = now;
   const beforeDecision = spriteStarts().length;
-  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '1' }));
+  pressKey('1');
   await wait(60);
   record(`decision cues queued in the first 60 ms: ${spriteStarts().length - beforeDecision}`);
 
@@ -446,16 +510,16 @@ async function main() {
     return after.length >= 4;
   })();
   const stings = audioLog.filter((e) => e.kind === 'start' && e.name === 'sprite' && e.t >= keyAt).length;
-  record(`at least 4 cues in the sequence (clacks, impact, stamp): ${orderOk ? 'PASS' : 'FAIL'} (${stings} cues)`);
+  record(`at least 4 cues in the sequence (clacks, impact, stamp): ${cueVerdict(stings, orderOk)} (${stings} cues)`);
 
   /* --- 5. advancing fades the outcome group out --- */
   const stopsBefore = audioLog.filter((e) => e.kind === 'stop').length;
   const b3 = spriteStarts().length;
-  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+  pressKey('Enter');
   await wait(600);
   const swept = audioLog.filter((e) => e.kind === 'stop').length - stopsBefore;
   record(`next dilemma fired ${spriteStarts().length - b3} cue(s)`);
-  record(`advance faded ${swept} still-ringing outcome voice(s) ${swept >= 1 ? 'PASS' : 'FAIL'}`);
+  record(`advance faded ${swept} still-ringing outcome voice(s) ${cueVerdict(swept, swept >= 1)}`);
 
   /* --- 5b. the audio settings popover --- */
   const trigger = doc.querySelector('button[aria-label="Ses ayarları"]');
@@ -476,11 +540,29 @@ async function main() {
     }`,
   );
 
+  // Opening the panel focused its first control, so from here the focused element
+  // is inside .audio-settings. Check that guard first, while effects are still
+  // enabled: if it were missing this Space would reach the game handler and fire a
+  // lever cue. Window-dispatch could never see this, because event.target was the
+  // window and App's `origin?.closest?.('.audio-settings')` test was skipped.
+  const guardBefore = spriteStarts().length;
+  const guardTarget = pressKey(' ');
+  await wait(300);
+  const guardFired = spriteStarts().length - guardBefore;
+  record(
+    `space on the focused control inside the popover fires no game cue: ${
+      guardFired === 0 ? 'PASS' : 'FAIL'
+    } (${guardFired} cue(s), target ${guardTarget.className || guardTarget.tagName})`,
+  );
+
   const sfxSwitch = switches.find((el) => (el.getAttribute('aria-label') || '').includes('Efektler'));
   const cueWhileMuted = (() => {
     sfxSwitch?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     const before = spriteStarts().length;
-    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ' }));
+    // Deliberately at the body, not at the focused element: this check is about the
+    // effects switch silencing a GAME cue, so it has to reach App's handler. From
+    // inside the popover it never would -- that is the guard checked just above.
+    pressKey(' ', doc.body);
     return { before };
   })();
   await wait(300);
@@ -492,30 +574,30 @@ async function main() {
 
   sfxSwitch?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await wait(60);
-  record(
-    `effects switched back on plays the preview tick: ${
-      spriteStarts().length - cueWhileMuted.before > 0 ? 'PASS' : 'FAIL'
-    }`,
-  );
+  const previewTick = spriteStarts().length - cueWhileMuted.before;
+  record(`effects switched back on plays the preview tick: ${cueVerdict(previewTick, previewTick > 0)}`);
 
   const ambSwitch = switches.find((el) => (el.getAttribute('aria-label') || '').includes('Arka plan'));
   ambSwitch?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await wait(30);
   record(`background switch toggles: ${ambSwitch?.getAttribute('aria-checked') === 'false' ? 'PASS' : 'FAIL'}`);
 
-  doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  // From the focused control inside the panel, bubbling: AudioSettings listens for
+  // Escape in the capture phase on document, so this is the real path.
+  pressKey('Escape');
   await wait(30);
   record(`Escape closes the popover: ${doc.querySelector('.audio-settings__panel') ? 'FAIL' : 'PASS'}`);
 
   /* --- 6. sound off (M) must not fire a cue; on must fire one switch --- */
   const b4 = spriteStarts().length;
-  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'm' }));
+  pressKey('m');
   await wait(300);
   record(`M (off) fired ${spriteStarts().length - b4} cue(s) ${spriteStarts().length - b4 === 0 ? 'PASS' : 'FAIL'}`);
   const b5 = spriteStarts().length;
-  window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'M' }));
+  const mOnTarget = pressKey('M');
   await wait(300);
-  record(`M (on) fired ${spriteStarts().length - b5} cue(s) ${spriteStarts().length - b5 === 1 ? 'PASS' : 'FAIL'}`);
+  const mOnCues = spriteStarts().length - b5;
+  record(`M (on) fired ${mOnCues} cue(s) ${cueVerdict(mOnCues, mOnCues === 1)} (target ${mOnTarget.className || mOnTarget.tagName})`);
   record(`localStorage tramvay_sound_enabled = ${window.localStorage.getItem('tramvay_sound_enabled')}`);
 
   /* --- 7. a full diverted decision with comic mood (dilemma 26 is comic) --- */
@@ -545,4 +627,9 @@ async function main() {
 }
 
 await main();
-process.exit(0);
+
+// Propagate failure. This always exited 0, so a FAIL line was cosmetic and the
+// script could not be wired into package.json as a check that can actually fail.
+const failures = log.filter((l) => /\bFAIL\b/.test(l)).length;
+out(`\n${failures} failing check(s) across ${log.length} recorded lines; mode=${mode}`);
+process.exit(failures ? 1 : 0);

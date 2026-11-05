@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3f2f0" />
+    <!--
+      Inline SVG favicon: the diverging rails of the makas with the red junction.
+      A data URI means no extra request, and in particular no request for
+      /favicon.ico, which this deploy has no such file for and which would
+      otherwise be answered by the SPA rewrite with index.html (200, text/html)
+      for an image path. Percent-encoded because a literal '#' would be parsed as
+      a fragment and truncate the URI.
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox%3D'0 0 32 32'%3E%3Crect width%3D'32' height%3D'32' rx%3D'6' fill%3D'%23171512'%2F%3E%3Cg stroke%3D'%23f3f2f0' stroke-width%3D'2.5' stroke-linecap%3D'round' fill%3D'none'%3E%3Cpath d%3D'M16 27V17'%2F%3E%3Cpath d%3D'M16 17 8 7'%2F%3E%3Cpath d%3D'M16 17 24 7'%2F%3E%3C%2Fg%3E%3Ccircle cx%3D'16' cy%3D'17' r%3D'3' fill%3D'%23a82a22'%2F%3E%3C%2Fsvg%3E"
+    />
     <title>Absürt Tramvay İkilemleri</title>
     <meta name="description" content="Neal.fun'ın Absurd Trolley Problems oyununun Türk internet, yayıncı ve oyun topluluğuna özel interaktif felsefe oyunu." />
     <meta property="og:title" content="Absürt Tramvay İkilemleri" />

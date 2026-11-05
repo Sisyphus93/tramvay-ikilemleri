@@ -52,49 +52,29 @@ const ENTITY_META = {
   people: { code: 'İNS', kind: 'human' },
   streamer: { code: 'YAY', kind: 'human' },
   moderator: { code: 'MOD', kind: 'human' },
-  gamer: { code: 'OYN', kind: 'human' },
   cat: { code: 'KED', kind: 'cat' },
   pc: { code: 'PC', kind: 'object' },
   steam: { code: 'STM', kind: 'object' },
-  doner: { code: 'DÖN', kind: 'object' },
   taxi: { code: 'TAK', kind: 'object' },
   marti: { code: 'MRT', kind: 'object' },
   harddrive: { code: 'DSK', kind: 'object' },
   student: { code: 'ÖĞR', kind: 'human' },
   yourself: { code: 'SEN', kind: 'human' },
   teammate: { code: 'EQP', kind: 'human' },
-  richman: { code: 'ZNG', kind: 'human' },
   futurepeople: { code: 'GEL', kind: 'human' },
-  npc: { code: 'NPC', kind: 'human' },
-  code: { code: 'KOD', kind: 'object' },
   savings: { code: 'BRK', kind: 'object' },
   painting: { code: 'SNT', kind: 'object' },
   sleepers: { code: 'UYK', kind: 'human' },
   bestfriend: { code: 'ARK', kind: 'human' },
   glasses: { code: 'GÖZ', kind: 'object' },
-  cousins: { code: 'KZN', kind: 'human' },
   baby: { code: 'BEK', kind: 'human' },
   elderly: { code: 'YAŞ', kind: 'human' },
   clone: { code: 'KLN', kind: 'human' },
   mysterybox: { code: 'KUT', kind: 'object' },
   robot: { code: 'RBT', kind: 'object' },
   emptytrolley: { code: 'TRM', kind: 'object' },
-  prank: { code: 'ŞAK', kind: 'abstract' },
   enemy: { code: 'DŞM', kind: 'human' },
-  lifespan: { code: 'ÖMR', kind: 'abstract' },
   hype: { code: 'HYP', kind: 'abstract' },
-  gugu: { code: 'GUG', kind: 'human' },
-  ibo: { code: 'İBO', kind: 'human' },
-  samet: { code: 'SMT', kind: 'human' },
-  mete: { code: 'MTE', kind: 'human' },
-  kegri: { code: 'KGR', kind: 'human' },
-  katmanmasa: { code: 'KTM', kind: 'abstract' },
-  reddit: { code: 'RDT', kind: 'object' },
-  kick: { code: 'KCK', kind: 'object' },
-  food: { code: 'YMK', kind: 'object' },
-  canolar: { code: 'CAN', kind: 'human' },
-  sponsor: { code: 'SPN', kind: 'human' },
-  discord: { code: 'DSC', kind: 'object' },
 } satisfies Record<TrackEntityType, EntityMeta>;
 
 const easeInOutCubic = (p: number) =>
@@ -531,7 +511,12 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
         className="blueprint-svg block"
         width="100%"
         style={{ height: 'auto', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
-        role="img"
+        // `role="img"` was here, and it is the reason the lever was unreachable:
+        // descendants of an image role are removed from the accessibility tree,
+        // so the `<g role="button" tabindex="0">` lever below was invisible to
+        // assistive tech even though it took keyboard focus. `group` keeps the
+        // diagram named as one unit while exposing its children.
+        role="group"
         aria-label={`${dilemma.title}: ${dilemma.straightTrack.label} ve ${dilemma.divertedTrack.label} arasında makas şeması`}
       >
         <defs>
