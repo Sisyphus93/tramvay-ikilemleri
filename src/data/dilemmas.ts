@@ -6,7 +6,7 @@
 import { Dilemma } from '../types.ts';
 
 /**
- * Klasik/bonus ayrımı kaldırıldı: 27 ikilem tek bir listede.
+ * Klasik/bonus ayrımı kaldırıldı: 26 ikilem tek bir listede.
  * Sıralama klasik kontrol sorusuyla başlar; felsefi ısınmadan yayın metasına,
  * ego testlerine, Türk internet absürtlüğüne ve tam kaosa doğru kötüleşir.
  */
@@ -115,7 +115,7 @@ export const DILEMMAS: Dilemma[] = [
     "chatReaction": "Chat: \"Felsefeciler şok, kolu tutan adam kendini feda etti o7\"",
     "twitchEmote": "FEELSGOOD"
   },
-  // Derin mevzu: yaş, mesafe, bilinç, gelecek, araçsallaştırma
+  // Derin mevzu: yaş, mesafe, bilinç, gelecek
   {
     "id": 5,
     "title": "5. İkilem: Yaş Farkı",
@@ -216,35 +216,10 @@ export const DILEMMAS: Dilemma[] = [
     "chatReaction": "Chat 2400 yılını gözünü kırpmadan yok etti; iklim krizi ve 'Boomer' zihniyeti muhabbeti döndü.",
     "twitchEmote": "5HEAD"
   },
-  {
-    "id": 9,
-    "title": "9. İkilem: Döngü",
-    "question": "Tramvay 5 kişiye gidiyor. Kolu çekersen daire çizen raydaki 1 kişiye çarpacak; o kişinin bedeni treni yavaşlatıp 5 kişiyi kurtaracak. Yine sadece kolu çekiyorsun ama 1 kişiyi bilerek etten kalkan olarak kullanıyorsun. 1. sorudan neden farklı hissettiriyor?",
-    "straightTrack": {
-      "label": "5 kişi",
-      "count": 5,
-      "entityType": "people",
-      "description": "Ana raydaki 5 kişi",
-      "isHuman": true
-    },
-    "divertedTrack": {
-      "label": "Bedeni treni yavaşlatacak 1 kişi",
-      "count": 1,
-      "entityType": "people",
-      "description": "Daire raydaki, bedeni treni yavaşlatacak 1 kişi",
-      "isHuman": true
-    },
-    "straightActionLabel": "Müdahale etme",
-    "divertedActionLabel": "Kolu çek (etten kalkan)",
-    "straightCommentary": "Beş kişi öldü; tek kişi yaşadı.",
-    "divertedCommentary": "Bir kişinin bedeni treni yavaşlattı; o öldü, beş kişi kurtuldu.",
-    "chatReaction": "Şişman Adam'da kimse adamı itmek istememişti; burada chat'in beyni yanıyor.",
-    "twitchEmote": "5HEAD"
-  },
   // Yayın metası: PR, chat, modlar, arkadaşlar, para, setup
   {
-    "id": 10,
-    "title": "10. İkilem: Homelander İkilemi",
+    "id": 9,
+    "title": "9. İkilem: Homelander İkilemi",
     "question": "İki seçeneğin var: 5 kişiyi kurtarırsan dünya seni katil sanacak; 5 kişinin ölmesine izin verirsen dünya seni \"kurtarmaya çalışan bir kahraman\" ilan edecek. İyi bir insan olmak mı, iyi bir PR'a sahip olup linç yememek mi?",
     "straightTrack": {
       "label": "5 kişi",
@@ -269,8 +244,8 @@ export const DILEMMAS: Dilemma[] = [
     "conceptualChoice": true
   },
   {
-    "id": 11,
-    "title": "11. İkilem: Yabancı İnsan vs. Senin Evcil Hayvanın",
+    "id": 10,
+    "title": "10. İkilem: Yabancı İnsan vs. Senin Evcil Hayvanın",
     "question": "Tramvay 1 yabancı insana doğru gidiyor. Kolu çekersen onun yerine senin evcil hayvanın ölecek. Yabancı insan mı, senin evcil hayvanın mı?",
     "straightTrack": {
       "label": "1 yabancı insan",
@@ -294,8 +269,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 12,
-    "title": "12. İkilem: Mod Kurban Etme",
+    "id": 11,
+    "title": "11. İkilem: Mod Kurban Etme",
     "question": "Tramvay rastgele 5 izleyiciye gidiyor. Kolu çekersen onların yerine baş moderatörün ölecek. 5 Rastgele İzleyici vs. Baş Moderatörün: modları kullanmanın tam zamanı.",
     "straightTrack": {
       "label": "5 rastgele izleyici",
@@ -319,8 +294,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 13,
-    "title": "13. İkilem: Yayıncı Dostun",
+    "id": 12,
+    "title": "12. İkilem: Yayıncı Dostun",
     "question": "Tramvay 5 yabancıya gidiyor. Kolu çekersen en yakın yayıncı arkadaşın ölecek. 5 Yabancı vs. En Yakın Yayıncı Arkadaşın: etkileşim ve klip kasma sorusu.",
     "straightTrack": {
       "label": "5 yabancı",
@@ -344,8 +319,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 14,
-    "title": "14. İkilem: Kapitalizm Testi",
+    "id": 13,
+    "title": "13. İkilem: Kapitalizm Testi",
     "question": "Tramvay abone olmayan veya Adblock kullanan 5 izleyiciye gidiyor. Kolu çekersen 1 Tier-3 abonen veya en büyük bağışçın ölecek. 5 'pleb' mi, 1 'balina' mı?",
     "straightTrack": {
       "label": "5 abone olmayan / Adblock kullanan izleyici",
@@ -369,8 +344,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 15,
-    "title": "15. İkilem: Sistem Katili",
+    "id": 14,
+    "title": "14. İkilem: Sistem Katili",
     "question": "Tramvay 1 yabancıya gidiyor. Kolu çekersen yabancı kurtulacak ama tramvay tüm yayın odanı ve bilgisayarını dümdüz edecek. Ekmek teknen mi, insan hayatı mı?",
     "straightTrack": {
       "label": "1 yabancı",
@@ -395,8 +370,8 @@ export const DILEMMAS: Dilemma[] = [
   },
   // Ego ve açgözlülük: rüşvet, klon, IQ, GTA 6
   {
-    "id": 16,
-    "title": "16. İkilem: Rüşvet",
+    "id": 15,
+    "title": "15. İkilem: Rüşvet",
     "question": "Tramvay 5 kişiye gidiyor. Kolu çekersen 1 kişi ölecek, 5 kişi kurtulacak ve sana 1 Milyon Dolar verilecek. Modlar fiyatı düşürürse kararın değişir mi?",
     "straightTrack": {
       "label": "5 kişi",
@@ -420,8 +395,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 17,
-    "title": "17. İkilem: Narsist",
+    "id": 16,
+    "title": "16. İkilem: Narsist",
     "question": "Tramvay 5 yabancıya gidiyor. Kolu çekersen senin birebir klonun ölecek. 5 Yabancı vs. Senin birebir klonun: kaçışın yok.",
     "straightTrack": {
       "label": "5 yabancı",
@@ -445,8 +420,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 18,
-    "title": "18. İkilem: Lobotomi",
+    "id": 17,
+    "title": "17. İkilem: Lobotomi",
     "question": "Tramvay 5 yabancıya gidiyor. Kolu çekersen tren sana çarpacak; ölmezsin ama IQ'n 40 puan düşecek ve 5 yabancı kurtulacak. Kendinle dalga geçmeye hazır mısın?",
     "straightTrack": {
       "label": "5 yabancı",
@@ -471,8 +446,8 @@ export const DILEMMAS: Dilemma[] = [
     "conceptualChoice": true
   },
   {
-    "id": 19,
-    "title": "19. İkilem: İnsanlık Mirası",
+    "id": 18,
+    "title": "18. İkilem: İnsanlık Mirası",
     "question": "Tramvay 1 canlı insana gidiyor. Kolu çekersen içinde Mona Lisa, kelliğin çaresi ve GTA 6'nın kaynak kodları olan bir kasa yok olacak. Sanat/Bilim mi, İnsan Hayatı mı?",
     "straightTrack": {
       "label": "1 canlı insan",
@@ -497,8 +472,8 @@ export const DILEMMAS: Dilemma[] = [
   },
   // Türk internet absürtlüğü: Steam, taksi, notçu, kanka, dizi, fiber
   {
-    "id": 20,
-    "title": "20. İkilem: Steam Kütüphanesi & Dolar Kuru",
+    "id": 19,
+    "title": "19. İkilem: Steam Kütüphanesi & Dolar Kuru",
     "question": "Tramvay raylara bağlı 4 masum insana doğru hızla ilerliyor. Kolu çekersen yan raydaki, içerisinde 800 adet oyun, binlerce saatlik kayıt ve Türkiye’nin dolara geçişinden önceki tüm birikiminin bulunduğu 15 yıllık ana Steam hesabını ve diskini un ufak edecek.",
     "straightTrack": {
       "label": "4 Masum İnsan",
@@ -524,9 +499,9 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "SADGE"
   },
   {
-    "id": 21,
+    "id": 20,
     "comic": true,
-    "title": "21. İkilem: Sarı Taksi vs Martı TAG",
+    "title": "20. İkilem: Sarı Taksi vs Martı TAG",
     "question": "Tramvay yağmur altında müşteri seçip \"karşıya geçmem\" diyen 1 sarı taksiye doğru gidiyor. Kolu çekersen yan raydaki, makul fiyata yolculuk yapan 5 masum Martı TAG kullanıcısını ezecek.",
     "straightTrack": {
       "label": "Yolcu Seçen 1 Sarı Taksi",
@@ -552,8 +527,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "KEKW"
   },
   {
-    "id": 22,
-    "title": "22. İkilem: Final Gecesi Not Çıkaran Tek Çalışkan Öğrenci",
+    "id": 21,
+    "title": "21. İkilem: Final Gecesi Not Çıkaran Tek Çalışkan Öğrenci",
     "question": "Tramvay bütün dönem yatmış ve sabahki finalden kalacak 5 hayta üniversite öğrencisine doğru gidiyor. Kolu çekersen yan raydaki, sabaha kadar uyumayıp tüm amfiye PDF not hazırlayan o tek fedakar çalışkan öğrenciyi ezecek.",
     "straightTrack": {
       "label": "5 Tembel Öğrenci",
@@ -579,9 +554,9 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "LUL"
   },
   {
-    "id": 23,
+    "id": 22,
     "comic": true,
-    "title": "23. İkilem: Rank Terfi Maçında 0/15 Giden Kolsuz Kanka",
+    "title": "22. İkilem: Rank Terfi Maçında 0/15 Giden Kolsuz Kanka",
     "question": "Tramvay 3 masum insana doğru gidiyor. Kolu çekersen yan raydaki, LoL/Valorant terfi maçında 0/15 Yasuo/Jett oynayıp sürekli surrender vermeyen ama gerçek hayatta can dostun olan kolsuz kankanı ezecek.",
     "straightTrack": {
       "label": "3 Masum İnsan",
@@ -607,8 +582,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "KEKW"
   },
   {
-    "id": 24,
-    "title": "24. İkilem: Kurtlar Vadisi İlk 97 Bölüm Orijinal Master Kaseti",
+    "id": 23,
+    "title": "23. İkilem: Kurtlar Vadisi İlk 97 Bölüm Orijinal Master Kaseti",
     "question": "Tramvay 4 masum insana doğru hızla ilerliyor. Kolu çekersen yan rayda duran, Türk dizi tarihinin zirvesi Kurtlar Vadisi ilk 97 bölümün dünyadaki tek 4K sansürsüz orijinal master kasetini parçalayacak.",
     "straightTrack": {
       "label": "4 Masum İnsan",
@@ -634,8 +609,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 25,
-    "title": "25. İkilem: Türkiye İnternet Ana Fiber Omurga Hattı",
+    "id": 24,
+    "title": "24. İkilem: Türkiye İnternet Ana Fiber Omurga Hattı",
     "question": "Final yaklaşıyor! Tramvay raylardaki 4 masum insana doğru hızla ilerliyor. Kolu çekersen yan raydaki, tüm Türkiye’nin yurtdışı internet çıkışını sağlayan ana fiber optik kablo omurgasını biçecek ve tüm ülkede 1 ay boyunca internet kesilecek (ping: 999 ms).",
     "straightTrack": {
       "label": "4 Masum İnsan",
@@ -662,9 +637,9 @@ export const DILEMMAS: Dilemma[] = [
   },
   // Tam kaos ve final: kickflip ve yayını kapatma
   {
-    "id": 26,
+    "id": 25,
     "comic": true,
-    "title": "26. İkilem: Şovmen Tren",
+    "title": "25. İkilem: Şovmen Tren",
     "question": "Tramvay 5 kişiye gidiyor. Kolu çekersen diğer raydaki 5 kişi ölecek ama tren insanları ezmeden önce havada efsane bir 'kickflip' atacak. Sırf havalı bir hareket için bir trajediye aktif olarak ortak olur musun?",
     "straightTrack": {
       "label": "Ana raydaki 5 kişi",
@@ -688,8 +663,8 @@ export const DILEMMAS: Dilemma[] = [
     "twitchEmote": "5HEAD"
   },
   {
-    "id": 27,
-    "title": "27. İkilem: Büyük Final",
+    "id": 26,
+    "title": "26. İkilem: Büyük Final",
     "question": "5 kurgusal insan ölecek. Kolu çekip onları kurtarırsan anında \"Yayını Kapat\" tuşuna basman gerekiyor. 60 saniyelik anket: kendi eğlencen mi, yoksa yayını aniden kapatma meme'i mi?",
     "straightTrack": {
       "label": "5 kurgusal insan",
