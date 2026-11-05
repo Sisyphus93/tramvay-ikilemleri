@@ -67,14 +67,14 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
   const hasMoreRows = history.length > PREVIEW_ROW_COUNT;
 
   const getArchetype = () => {
-    // Denominator is the number of rounds actually recorded, not the 27 the game
-    // contains. Identical for a complete run; for a short one, dividing by 27
+    // Denominator is the number of rounds actually recorded, not the 26 the game
+    // contains. Identical for a complete run; for a short one, dividing by 26
     // silently understated the ratio and could select a different archetype.
     const leverPullRatio = history.length > 0 ? totalLeverPulls / history.length : 0;
-    const savedPet = history.find((h) => h.dilemmaId === 11 && !h.leverPulled);
-    const killedPet = history.find((h) => h.dilemmaId === 11 && h.leverPulled);
-    const killedKolsuz = history.find((h) => h.dilemmaId === 23 && h.leverPulled);
-    const tookBribe = history.find((h) => h.dilemmaId === 16 && h.leverPulled);
+    const savedPet = history.find((h) => h.dilemmaId === 10 && !h.leverPulled);
+    const killedPet = history.find((h) => h.dilemmaId === 10 && h.leverPulled);
+    const killedKolsuz = history.find((h) => h.dilemmaId === 22 && h.leverPulled);
+    const tookBribe = history.find((h) => h.dilemmaId === 15 && h.leverPulled);
 
     if (tookBribe && leverPullRatio >= 0.45) {
       return {
@@ -166,7 +166,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
     playSoftTick(1);
     // history.length, not DILEMMAS.length: the share text states the same ratio
     // the archetype is computed from, so the two must not disagree on a short
-    // history. Identical for a complete 27-round game.
+    // history. Identical for a complete 26-round game.
     const text = `ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM\nUnvanım: ${archetype.title} (${archetype.badge})\nToplam zayiat: ${totalDeaths} can kaybı\nMakas tercihi: ${history.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
 
     // No feature check and no .catch here used to mean: on a non-secure origin
