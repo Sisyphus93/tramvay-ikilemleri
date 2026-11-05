@@ -164,7 +164,10 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({
 
   const handleCopy = () => {
     playSoftTick(1);
-    const text = `ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM\nUnvanım: ${archetype.title} (${archetype.badge})\nToplam zayiat: ${totalDeaths} can kaybı\nMakas tercihi: ${DILEMMAS.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
+    // history.length, not DILEMMAS.length: the share text states the same ratio
+    // the archetype is computed from, so the two must not disagree on a short
+    // history. Identical for a complete 27-round game.
+    const text = `ABSÜRT TRAMVAY İKİLEMLERİ — SİCİL RAPORUM\nUnvanım: ${archetype.title} (${archetype.badge})\nToplam zayiat: ${totalDeaths} can kaybı\nMakas tercihi: ${history.length} ikilemde ${totalLeverPulls} kez kolu çektim!\n\nFelsefeyi sen de çöz: ${window.location.origin}`;
 
     // No feature check and no .catch here used to mean: on a non-secure origin
     // the property access threw synchronously out of the click handler, and on a
