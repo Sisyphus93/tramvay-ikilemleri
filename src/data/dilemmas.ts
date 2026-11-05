@@ -636,7 +636,7 @@ export const DILEMMAS: Dilemma[] = [
   {
     "id": 25,
     "title": "25. İkilem: Türkiye İnternet Ana Fiber Omurga Hattı",
-    "question": "Büyük Final! Tramvay raylardaki 4 masum insana doğru hızla ilerliyor. Kolu çekersen yan raydaki, tüm Türkiye’nin yurtdışı internet çıkışını sağlayan ana fiber optik kablo omurgasını biçecek ve tüm ülkede 1 ay boyunca internet kesilecek (ping: 999 ms).",
+    "question": "Final yaklaşıyor! Tramvay raylardaki 4 masum insana doğru hızla ilerliyor. Kolu çekersen yan raydaki, tüm Türkiye’nin yurtdışı internet çıkışını sağlayan ana fiber optik kablo omurgasını biçecek ve tüm ülkede 1 ay boyunca internet kesilecek (ping: 999 ms).",
     "straightTrack": {
       "label": "4 Masum İnsan",
       "count": 4,
