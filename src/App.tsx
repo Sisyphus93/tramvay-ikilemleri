@@ -44,6 +44,22 @@ const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 const CONTROL_SWAP_MS = 360;
 
 /**
+ * Return to the top of the page between screens.
+ *
+ * `behavior: 'smooth'` is an animated scroll, which is a vestibular trigger, so
+ * it has to respect prefers-reduced-motion the same way the animations already
+ * do. All three call sites (advance, advance-to-summary, restart) used to
+ * hard-code 'smooth'.
+ *
+ * `useReducedMotion()` resolves to `null` until the preference is known, which is
+ * falsy and therefore animates -- matching how the rest of this file treats it.
+ */
+const scrollToTop = (reduceMotion: boolean | null): void => {
+  if (typeof window === 'undefined') return;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+};
+
+/**
  * Dilemmas read as "setup. question?" or "setup: prompt." — splitting them
  * lets the final ask carry the visual weight while preserving original punctuation.
  */
@@ -272,12 +288,12 @@ export default function App() {
       setLeverPulled(false);
       setShowResult(false);
       setIsAnimating(false);
-      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop(reduceMotion);
     } else {
       setGameState('SUMMARY');
-      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop(reduceMotion);
     }
-  }, [currentStep, clearRevealTimer]);
+  }, [currentStep, clearRevealTimer, reduceMotion]);
 
   const handleRestart = useCallback(() => {
     clearRevealTimer();
@@ -301,8 +317,8 @@ export default function App() {
     setIsAnimating(false);
     setHistory([]);
     setGameState('TITLE');
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [clearRevealTimer]);
+    scrollToTop(reduceMotion);
+  }, [clearRevealTimer, reduceMotion]);
 
   const totalDeaths = history.reduce((sum, h) => sum + h.humanDeaths, 0);
 
