@@ -112,6 +112,9 @@ export const AudioSettings: React.FC = () => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  /** set between a pointerdown inside the widget and the pointerup/focusin that follows it */
+  const pointerInsideRef = useRef(false);
+  const pointerBackstopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** re-read the engine state every time it opens (M / other tabs may have moved it) */
   const openPanel = useCallback(() => {
@@ -154,6 +157,26 @@ export const AudioSettings: React.FC = () => {
   // content. focusout bubbles, and relatedTarget says where focus went, so a move
   // between the panel's own controls is not a leave.
   //
+  // relatedTarget alone is not enough, because it is null whenever focus went
+  // nowhere in particular. That includes two presses that start *inside* the widget:
+  //   - a mouse press on non-focusable content in the panel (a label, the percentage
+  //     text, the padding), which blurs the focused control and parks focus on the
+  //     document body, and
+  //   - a click on a <button> in Safari and Firefox on macOS, which do not focus
+  //     buttons on mousedown at all, so the previously focused control blurs to
+  //     nothing.
+  // Treating either as a leave dismisses the panel from under the user, and because
+  // closing unmounts it the click on the toggle is lost. pointerInsideRef records
+  // that a press is in flight, and the focusout handler ignores a leave while it is
+  // set. Keyboard navigation never sets it, so Tab and Shift+Tab out still close.
+  //
+  // The flag is cleared by pointerup / pointercancel and by the next focusin inside
+  // the root, plus a setTimeout(0) backstop for the presses where none of those ever
+  // arrive (press inside, drag out of the window, release there). The backstop cannot
+  // clear the flag too early: pointerdown and the focus change caused by the matching
+  // mousedown are dispatched in the same task, so the focusout that has to be ignored
+  // always runs before a queued timer can fire.
+  //
   // Deliberately no aria-modal and no focus trap: this stays a non-modal popover,
   // and adding aria-modal without a trap would claim a containment that is not
   // implemented. Escape and outside-click keep working exactly as before, and
@@ -163,16 +186,49 @@ export const AudioSettings: React.FC = () => {
     if (!open) return;
     const root = rootRef.current;
     if (!root) return;
+
+    const clearPointerFlag = () => {
+      if (pointerBackstopRef.current !== null) {
+        clearTimeout(pointerBackstopRef.current);
+        pointerBackstopRef.current = null;
+      }
+      pointerInsideRef.current = false;
+    };
+
+    const onPointerDown = (event: Event) => {
+      if (!(event.target instanceof Node) || !root.contains(event.target)) return;
+      pointerInsideRef.current = true;
+      if (pointerBackstopRef.current !== null) clearTimeout(pointerBackstopRef.current);
+      pointerBackstopRef.current = setTimeout(clearPointerFlag, 0);
+    };
+
+    const onFocusIn = (event: FocusEvent) => {
+      if (event.target instanceof Node && root.contains(event.target)) clearPointerFlag();
+    };
+
     const onFocusOut = (event: FocusEvent) => {
       const next = event.relatedTarget as Node | null;
       if (next && root.contains(next)) return;
-      // Relatedtarget is null when the focused node is removed from the DOM, which
-      // also happens as this panel unmounts. setOpen(false) is idempotent, so the
+      if (pointerInsideRef.current) return;
+      // relatedTarget is also null when the focused node is removed from the DOM,
+      // which happens as this panel unmounts. setOpen(false) is idempotent, so the
       // redundant call is harmless and no focus is taken.
       close(false);
     };
+
+    root.addEventListener('pointerdown', onPointerDown, true);
+    root.addEventListener('pointerup', clearPointerFlag, true);
+    root.addEventListener('pointercancel', clearPointerFlag, true);
+    root.addEventListener('focusin', onFocusIn);
     root.addEventListener('focusout', onFocusOut);
-    return () => root.removeEventListener('focusout', onFocusOut);
+    return () => {
+      root.removeEventListener('pointerdown', onPointerDown, true);
+      root.removeEventListener('pointerup', clearPointerFlag, true);
+      root.removeEventListener('pointercancel', clearPointerFlag, true);
+      root.removeEventListener('focusin', onFocusIn);
+      root.removeEventListener('focusout', onFocusOut);
+      clearPointerFlag();
+    };
   }, [open, close]);
 
   // first control gets focus when the popover opens
