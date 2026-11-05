@@ -96,7 +96,7 @@ const splitQuestion = (question: string): { setup: string; ask: string } => {
     const tail = normalized.slice(cut + 2);
     // Only promote the tail when it really is the ask.
     //
-    // Ids 20-25 are two setup sentences with no question mark anywhere:
+    // Ids 19–24 are two setup sentences with no question mark anywhere:
     // "Tramvay <straight track> gidiyor. Kolu çekersen <diverted track> ezecek."
     // Cutting at the last period put the consequence clause in the heavy
     // .q__ask (ink, weight 800) and left the situation clause in the muted
