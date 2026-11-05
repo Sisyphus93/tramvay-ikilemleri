@@ -93,10 +93,29 @@ const splitQuestion = (question: string): { setup: string; ask: string } => {
     };
   }
   if (cut > 20) {
-    return {
-      setup: normalized.slice(0, cut + 1),
-      ask: normalized.slice(cut + 2),
-    };
+    const tail = normalized.slice(cut + 2);
+    // Only promote the tail when it really is the ask.
+    //
+    // Ids 20-25 are two setup sentences with no question mark anywhere:
+    // "Tramvay <straight track> gidiyor. Kolu çekersen <diverted track> ezecek."
+    // Cutting at the last period put the consequence clause in the heavy
+    // .q__ask (ink, weight 800) and left the situation clause in the muted
+    // .q__setup (weight 500), so the two halves of one symmetric setup rendered
+    // at different weights and the heavier one was not a question. Fall through
+    // to the unsplit return below and let the whole thing carry one weight.
+    //
+    // The colon branch above is deliberately NOT guarded. "5 Yabancı vs. 1
+    // Yabancı: ne yaparsın?" (id 1) and "5 Rastgele İzleyici vs. Baş
+    // Moderatörün: modları kullanmanın tam zamanı." (id 12) are the same
+    // construction, and the clause after the colon is the punchline whether or
+    // not it ends in a question mark. Guarding it would make ids 12, 13, 17 and
+    // 27 inconsistent with ids 1, 3 and the rest of the "vs." family.
+    if (tail.includes('?')) {
+      return {
+        setup: normalized.slice(0, cut + 1),
+        ask: tail,
+      };
+    }
   }
   return { setup: '', ask: normalized };
 };
