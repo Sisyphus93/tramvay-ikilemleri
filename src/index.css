@@ -746,6 +746,21 @@ main.screen-main {
 
 .blueprint-lever__plate { fill: var(--raised); }
 
+/* The lever is an SVG <g role="button" tabindex="0">, so the global
+   :focus-visible rule above is not enough: browsers do not reliably paint
+   `outline` on SVG child elements. Draw the ring with SVG paint as well, which
+   works wherever strokes work. */
+.blueprint-lever:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.blueprint-lever:focus-visible .blueprint-lever__plate {
+  fill: var(--sunken);
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
 .blueprint-tram-trail line { stroke: var(--ink); stroke-width: 3; opacity: .35; }
 
 .blueprint-medallion--hit .blueprint-medallion__shake { transform: translate(1px, 0); }

@@ -531,7 +531,12 @@ export const TrolleyCanvas: React.FC<TrolleyCanvasProps> = ({
         className="blueprint-svg block"
         width="100%"
         style={{ height: 'auto', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
-        role="img"
+        // `role="img"` was here, and it is the reason the lever was unreachable:
+        // descendants of an image role are removed from the accessibility tree,
+        // so the `<g role="button" tabindex="0">` lever below was invisible to
+        // assistive tech even though it took keyboard focus. `group` keeps the
+        // diagram named as one unit while exposing its children.
+        role="group"
         aria-label={`${dilemma.title}: ${dilemma.straightTrack.label} ve ${dilemma.divertedTrack.label} arasında makas şeması`}
       >
         <defs>
