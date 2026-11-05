@@ -121,6 +121,32 @@ export const AudioSettings: React.FC = () => {
     };
   }, [open, close]);
 
+  // Close when focus leaves the whole widget. Without this, Tab walks out of the
+  // panel into the page behind it while the panel stays open and keeps covering
+  // content. focusout bubbles, and relatedTarget says where focus went, so a move
+  // between the panel's own controls is not a leave.
+  //
+  // Deliberately no aria-modal and no focus trap: this stays a non-modal popover,
+  // and adding aria-modal without a trap would claim a containment that is not
+  // implemented. Escape and outside-click keep working exactly as before, and
+  // close(false) here does not steal focus back -- the element the user tabbed to
+  // keeps it.
+  useEffect(() => {
+    if (!open) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const onFocusOut = (event: FocusEvent) => {
+      const next = event.relatedTarget as Node | null;
+      if (next && root.contains(next)) return;
+      // Relatedtarget is null when the focused node is removed from the DOM, which
+      // also happens as this panel unmounts. setOpen(false) is idempotent, so the
+      // redundant call is harmless and no focus is taken.
+      close(false);
+    };
+    root.addEventListener('focusout', onFocusOut);
+    return () => root.removeEventListener('focusout', onFocusOut);
+  }, [open, close]);
+
   // first control gets focus when the popover opens
   useEffect(() => {
     if (!open) return;
