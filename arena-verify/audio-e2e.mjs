@@ -600,7 +600,7 @@ async function main() {
   record(`M (on) fired ${mOnCues} cue(s) ${cueVerdict(mOnCues, mOnCues === 1)} (target ${mOnTarget.className || mOnTarget.tagName})`);
   record(`localStorage tramvay_sound_enabled = ${window.localStorage.getItem('tramvay_sound_enabled')}`);
 
-  /* --- 7. a full diverted decision with comic mood (dilemma 26 is comic) --- */
+  /* --- 7. a full diverted decision with comic mood (dilemma 25 is comic) --- */
   record(`console errors: ${consoleErrors.length} ${consoleErrors.length === 0 ? 'PASS' : 'FAIL'}`);
   record(`console warns: ${consoleWarns.length} ${consoleWarns.length <= 1 ? 'PASS' : 'CHECK'} ${consoleWarns.join(' | ')}`);
   record(`unhandled rejections: ${rejections.length} ${rejections.length === 0 ? 'PASS' : 'FAIL'}`);
