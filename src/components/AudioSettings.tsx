@@ -39,6 +39,29 @@ const percentOf = (volume: number): number => Math.round(volume * 100);
 
 const Row: React.FC<RowProps> = ({ label, enabled, volume, onToggle, onVolume, onCommit }) => {
   const pct = percentOf(volume);
+
+  /**
+   * One commit tick per interaction, not per event.
+   *
+   * pointerup, keyup and blur all mean "the user finished adjusting", and a
+   * single adjustment fires more than one of them: release a drag and then click
+   * somewhere else (pointerup + blur), or press an arrow key and then Tab away
+   * (keyup + blur). All three used to call onCommit unconditionally, so one
+   * adjustment ticked twice.
+   *
+   * The flag is cleared when a new interaction starts (pointerdown, keydown,
+   * focus), so two genuinely separate adjustments still tick twice.
+   */
+  const committedRef = useRef(false);
+  const beginInteraction = useCallback(() => {
+    committedRef.current = false;
+  }, []);
+  const commit = useCallback(() => {
+    if (!onCommit || committedRef.current) return;
+    committedRef.current = true;
+    onCommit();
+  }, [onCommit]);
+
   return (
     <div className="audio-settings__row">
       <button
@@ -63,10 +86,13 @@ const Row: React.FC<RowProps> = ({ label, enabled, volume, onToggle, onVolume, o
         value={pct}
         aria-label={`${label} düzeyi`}
         aria-valuetext={`${pct}%`}
+        onPointerDown={beginInteraction}
+        onKeyDown={beginInteraction}
+        onFocus={beginInteraction}
         onChange={(event) => onVolume(Number(event.target.value) / 100)}
-        onPointerUp={onCommit}
-        onKeyUp={onCommit}
-        onBlur={onCommit}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
         className="audio-settings__slider"
       />
 
