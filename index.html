@@ -21,7 +21,13 @@
     <meta property="og:title" content="Absürt Tramvay İkilemleri" />
     <meta property="og:description" content="27 absürt ikilem. Tek bir makas kolu. Türk internetine özel interaktif felsefe oyunu." />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <!--
+      "summary" and not "summary_large_image": no Open Graph image is declared on
+      this page, so the large-image card was promising crawlers a picture that does
+      not exist and rendering an empty slot in the preview. Shipping an image was
+      explicitly out of scope.
+    -->
+    <meta name="twitter:card" content="summary" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
